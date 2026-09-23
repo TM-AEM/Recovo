@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Data extraction rules for Recovo (Android 12+ / API 31+).
+   Excludes heavy audio recording files located in the app-specific "recordings" directory
+   from cloud backup, while preserving Room database and user preferences.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="recordings" />
+    </cloud-backup>
+    <device-transfer>
+        <!-- Device-to-device direct transfer can include audio files if transferring between phones -->
+    </device-transfer>
+</data-extraction-rules>

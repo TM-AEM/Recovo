@@ -1,0 +1,6 @@
+{
+  "name": "Recovo",
+  "description": "Professional, lightweight voice recorder and audio studio for Android.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

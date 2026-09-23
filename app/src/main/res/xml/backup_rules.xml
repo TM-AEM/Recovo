@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Backup rules for Recovo.
+   Excludes heavy audio recording files located in the app-specific "recordings" directory
+   from automatic cloud backup, while preserving Room database and user preferences.
+-->
+<full-backup-content>
+    <exclude domain="file" path="recordings" />
+</full-backup-content>
