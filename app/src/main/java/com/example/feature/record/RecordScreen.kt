@@ -1,6 +1,7 @@
 package com.example.feature.record
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -107,7 +108,9 @@ fun RecordScreen(
     ) { isGranted ->
         hasMicPermission = isGranted
         if (!isGranted) {
-            showPermissionRationale = true
+            showPermissionRationale = (context as? Activity)?.shouldShowRequestPermissionRationale(
+                Manifest.permission.RECORD_AUDIO
+            ) != true
         } else {
             // If granted, optionally request notification permission on Android 13+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

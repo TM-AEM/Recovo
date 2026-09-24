@@ -13,6 +13,35 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 
+/** Monotonic duration tracker that can be tested without a physical microphone. */
+internal class RecordingDurationTracker(private val elapsedRealtime: () -> Long) {
+    private var accumulatedMs = 0L
+    private var activeSegmentStartMs: Long? = null
+
+    fun start() {
+        accumulatedMs = 0L
+        activeSegmentStartMs = elapsedRealtime()
+    }
+
+    fun pause() {
+        val start = activeSegmentStartMs ?: return
+        accumulatedMs += (elapsedRealtime() - start).coerceAtLeast(0L)
+        activeSegmentStartMs = null
+    }
+
+    fun resume() {
+        if (activeSegmentStartMs == null) activeSegmentStartMs = elapsedRealtime()
+    }
+
+    fun elapsedMs(): Long {
+        val active = activeSegmentStartMs?.let {
+            (elapsedRealtime() - it).coerceAtLeast(0L)
+        } ?: 0L
+        return accumulatedMs + active
+    }
+}
+
+
 /**
  * Robust MediaRecorder implementation of [AudioRecordingEngine].
  * Compatible with Android 11+ (API 30+) through Android 16+ (API 36+), including Samsung devices.
@@ -29,11 +58,7 @@ class MediaRecorderEngine(
     private var recorder: MediaRecorder? = null
     private var currentFile: File? = null
     private var currentConfig: AudioConfig = AudioConfig()
-
-    // Precise time tracking independent of UI frames
-    private var recordingStartTimeUptime: Long = 0L
-    private var accumulatedRecordedDurationMs: Long = 0L
-    private var pauseStartTimeUptime: Long = 0L
+    private val durationTracker = RecordingDurationTracker(SystemClock::elapsedRealtime)
 
     override fun getAmplitude(): Int {
         return try {
@@ -61,19 +86,20 @@ class MediaRecorderEngine(
             _state.value = RecordingState.Preparing
             currentFile = targetFile
             currentConfig = config
-            accumulatedRecordedDurationMs = 0L
 
             try {
-                val newRecorder = createAndConfigureRecorder(targetFile, config)
-                newRecorder.prepare()
-                newRecorder.start()
+                val configuredRecorder = createAndConfigureRecorder(targetFile, config)
+                recorder = configuredRecorder
+                configuredRecorder.prepare()
+                configuredRecorder.start()
+                durationTracker.start()
 
-                recorder = newRecorder
-                recordingStartTimeUptime = SystemClock.uptimeMillis()
                 _state.value = RecordingState.Recording(file = targetFile, elapsedMs = 0L, amplitude = 0)
                 Result.success(Unit)
             } catch (e: Exception) {
                 releaseRecorderInternal()
+                targetFile.delete()
+                currentFile = null
                 _state.value = RecordingState.Error("Failed to start recording: ${e.localizedMessage ?: e.javaClass.simpleName}", e)
                 Result.failure(e)
             }
@@ -100,6 +126,7 @@ class MediaRecorderEngine(
         } catch (e: Exception) {
             // Fallback for devices with strict samplerate constraints (e.g. 48000Hz fallback)
             try {
+                currentConfig = config.copy(sampleRate = 48000, bitRate = 128000, channelCount = 1)
                 newRecorder.reset()
                 newRecorder.setAudioSource(MediaRecorder.AudioSource.MIC)
                 newRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
@@ -126,14 +153,12 @@ class MediaRecorderEngine(
             }
 
             try {
-                recorder?.pause()
-                val now = SystemClock.uptimeMillis()
-                accumulatedRecordedDurationMs += (now - recordingStartTimeUptime)
-                pauseStartTimeUptime = now
-
+                val activeRecorder = recorder ?: error("MediaRecorder is not initialized")
+                activeRecorder.pause()
+                durationTracker.pause()
                 _state.value = RecordingState.Paused(
                     file = currentState.file,
-                    elapsedMs = accumulatedRecordedDurationMs,
+                    elapsedMs = durationTracker.elapsedMs(),
                     amplitude = 0
                 )
                 Result.success(Unit)
@@ -153,11 +178,12 @@ class MediaRecorderEngine(
             }
 
             try {
-                recorder?.resume()
-                recordingStartTimeUptime = SystemClock.uptimeMillis()
+                val activeRecorder = recorder ?: error("MediaRecorder is not initialized")
+                activeRecorder.resume()
+                durationTracker.resume()
                 _state.value = RecordingState.Recording(
                     file = currentState.file,
-                    elapsedMs = accumulatedRecordedDurationMs,
+                    elapsedMs = durationTracker.elapsedMs(),
                     amplitude = 0
                 )
                 Result.success(Unit)
@@ -182,31 +208,23 @@ class MediaRecorderEngine(
 
             _state.value = RecordingState.Stopping
 
-            var totalDurationMs = accumulatedRecordedDurationMs
-            if (currentState is RecordingState.Recording) {
-                val now = SystemClock.uptimeMillis()
-                totalDurationMs += (now - recordingStartTimeUptime)
-            }
+            val totalDurationMs = durationTracker.elapsedMs()
 
             try {
-                try {
-                    recorder?.stop()
-                } catch (stopEx: RuntimeException) {
-                    // MediaRecorder may throw RuntimeException if stop() is called immediately after start()
-                    // or if no valid audio frames were captured.
-                }
+                val activeRecorder = recorder ?: error("MediaRecorder is not initialized")
+                activeRecorder.stop()
                 releaseRecorderInternal()
 
-                val fileSize = if (file.exists()) file.length() else 0L
-
+                validateRecordingFile(file)
+                val metadata = readMetadata(file)
                 val result = RecordingSessionResult(
                     file = file,
                     durationMs = totalDurationMs,
-                    fileSizeBytes = fileSize,
-                    sampleRate = currentConfig.sampleRate,
-                    bitRate = currentConfig.bitRate,
-                    channelCount = currentConfig.channelCount,
-                    mimeType = currentConfig.format.mimeType,
+                    fileSizeBytes = file.length(),
+                    sampleRate = metadata.sampleRate,
+                    bitRate = metadata.bitRate,
+                    channelCount = metadata.channelCount,
+                    mimeType = metadata.mimeType,
                     format = currentConfig.format.extension.uppercase()
                 )
 
@@ -214,6 +232,8 @@ class MediaRecorderEngine(
                 Result.success(result)
             } catch (e: Exception) {
                 releaseRecorderInternal()
+                if (!file.isFile || file.length() <= 0L) file.delete()
+                currentFile = null
                 _state.value = RecordingState.Error("Error stopping recording: ${e.message}", e)
                 Result.failure(e)
             }
@@ -235,7 +255,7 @@ class MediaRecorderEngine(
                     }
                 }
                 currentFile = null
-                accumulatedRecordedDurationMs = 0L
+                durationTracker.start()
 
                 _state.value = RecordingState.Idle
                 Result.success(Unit)
@@ -247,24 +267,51 @@ class MediaRecorderEngine(
         }
     }
 
-    private fun releaseRecorderInternal() {
-        try {
-            recorder?.reset()
-            recorder?.release()
-        } catch (ignored: Exception) {
-        } finally {
-            recorder = null
+    private data class ValidatedMetadata(
+        val sampleRate: Int,
+        val bitRate: Int,
+        val channelCount: Int,
+        val mimeType: String
+    )
+
+    private fun validateRecordingFile(file: File) {
+        if (!file.isFile || file.length() <= 0L) {
+            throw IOException("Recording file is missing or empty")
         }
+    }
+
+    private fun readMetadata(file: File): ValidatedMetadata {
+        val retriever = android.media.MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(file.absolutePath)
+            fun value(key: Int, fallback: Int): Int =
+                retriever.extractMetadata(key)?.toIntOrNull()?.takeIf { it > 0 } ?: fallback
+            ValidatedMetadata(
+                sampleRate = value(android.media.MediaMetadataRetriever.METADATA_KEY_SAMPLERATE, currentConfig.sampleRate),
+                bitRate = value(android.media.MediaMetadataRetriever.METADATA_KEY_BITRATE, currentConfig.bitRate),
+                channelCount = value(android.media.MediaMetadataRetriever.METADATA_KEY_CHANNEL_COUNT, currentConfig.channelCount),
+                mimeType = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_MIMETYPE)
+                    ?.takeIf { it.isNotBlank() } ?: currentConfig.format.mimeType
+            )
+        } catch (e: Exception) {
+            throw IOException("Unable to validate recording metadata", e)
+        } finally {
+            try { retriever.release() } catch (_: Exception) { }
+        }
+    }
+
+    private fun releaseRecorderInternal() {
+        val activeRecorder = recorder ?: return
+        try { activeRecorder.reset() } catch (_: Exception) { }
+        try { activeRecorder.release() } catch (_: Exception) { }
+        recorder = null
     }
 
     fun updateCurrentDuration() {
         synchronized(this) {
             val s = _state.value
             if (s is RecordingState.Recording) {
-                val now = SystemClock.uptimeMillis()
-                val currentElapsed = accumulatedRecordedDurationMs + (now - recordingStartTimeUptime)
-                val amp = getAmplitude()
-                _state.value = s.copy(elapsedMs = currentElapsed, amplitude = amp)
+                _state.value = s.copy(elapsedMs = durationTracker.elapsedMs(), amplitude = getAmplitude())
             }
         }
     }

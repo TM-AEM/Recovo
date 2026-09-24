@@ -28,6 +28,7 @@ class RecordingController(private val context: Context) {
     private val _recordingState = MutableStateFlow<RecordingState>(RecordingState.Idle)
     val recordingState: StateFlow<RecordingState> = _recordingState.asStateFlow()
 
+    private var stateCollectionJob: kotlinx.coroutines.Job? = null
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val localBinder = binder as? RecordingService.LocalBinder
@@ -35,15 +36,19 @@ class RecordingController(private val context: Context) {
             isBound = true
 
             service?.let { svc ->
-                scope.launch {
+                stateCollectionJob?.cancel()
+                stateCollectionJob = scope.launch {
                     svc.recordingState.collect { state ->
                         _recordingState.value = state
                     }
                 }
             }
+
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
+            stateCollectionJob?.cancel()
+            stateCollectionJob = null
             service = null
             isBound = false
         }
@@ -103,6 +108,8 @@ class RecordingController(private val context: Context) {
     }
 
     fun unbind() {
+        stateCollectionJob?.cancel()
+        stateCollectionJob = null
         if (isBound) {
             try {
                 context.unbindService(connection)

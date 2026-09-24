@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.Locale
@@ -143,6 +144,8 @@ class RecordingService : Service() {
             if (fileResult !is StorageResult.Success) {
                 val errorMsg = if (fileResult is StorageResult.Error) fileResult.message else "Failed to create recording file"
                 _recordingState.value = RecordingState.Error(errorMsg)
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
                 return@launch
             }
 
@@ -331,9 +334,7 @@ class RecordingService : Service() {
 
     override fun onDestroy() {
         stopTimerAndMeter()
-        serviceScope.launch {
-            recordingEngine.cancel()
-        }
+        runBlocking(Dispatchers.IO) { recordingEngine.cancel() }
         serviceScope.cancel()
         super.onDestroy()
     }
