@@ -12,6 +12,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,11 +26,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -43,9 +47,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -62,11 +66,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.example.R
 import com.example.core.designsystem.theme.RecovoDimensions
 import com.example.core.designsystem.theme.RecovoSpacing
 import com.example.core.engine.RecordingState
@@ -83,12 +89,15 @@ fun RecordScreen(
     val controller = remember { RecordingController(context.applicationContext) }
     val viewModel = remember { RecordViewModel(controller) }
     val state by viewModel.recordingState.collectAsState()
+    val selectedQuality by viewModel.selectedQuality.collectAsState()
 
     DisposableEffect(Unit) {
         onDispose {
             controller.unbind()
         }
     }
+
+    var customTitle by remember { mutableStateOf("") }
 
     // Permission handling
     var hasMicPermission by remember {
@@ -102,6 +111,7 @@ fun RecordScreen(
 
     var showPermissionRationale by remember { mutableStateOf(false) }
     var showBackConfirmDialog by remember { mutableStateOf(false) }
+    var showDiscardConfirmDialog by remember { mutableStateOf(false) }
 
     val micPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -112,10 +122,9 @@ fun RecordScreen(
                 Manifest.permission.RECORD_AUDIO
             ) != true
         } else {
-            // If granted, optionally request notification permission on Android 13+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                    // Handled gracefully without blocking recording
+                    // Handled gracefully without blocking
                 }
             }
         }
@@ -125,7 +134,6 @@ fun RecordScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { _ -> }
 
-    // Intercept back button if recording or paused
     val isActivelyRecording = state is RecordingState.Recording || state is RecordingState.Paused
     BackHandler(enabled = isActivelyRecording) {
         showBackConfirmDialog = true
@@ -160,56 +168,129 @@ fun RecordScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(RecovoSpacing.medium),
+                .padding(RecovoSpacing.medium)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Permission Banner (if not granted)
-            if (!hasMicPermission) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = RecovoSpacing.medium),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(RecovoSpacing.medium),
-                        horizontalAlignment = Alignment.CenterHorizontally
+            // Top Section: Permissions & Quality Preset
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Permission Warning Card
+                if (!hasMicPermission) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = RecovoSpacing.medium)
+                            .testTag("record_permission_card"),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
                     ) {
-                        Text(
-                            text = "Microphone Permission Required",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(RecovoSpacing.small))
-                        Text(
-                            text = "Recovo requires microphone access to record audio locally on your device.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Spacer(modifier = Modifier.height(RecovoSpacing.medium))
-                        Button(
-                            onClick = {
-                                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error
-                            )
+                        Column(
+                            modifier = Modifier.padding(RecovoSpacing.medium),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("Grant Permission")
+                            Text(
+                                text = "Microphone Permission Required",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(RecovoSpacing.small))
+                            Text(
+                                text = "Recovo requires microphone access to record audio locally on your device.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Spacer(modifier = Modifier.height(RecovoSpacing.medium))
+                            Button(
+                                onClick = { micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                            ) {
+                                Text("Grant Permission")
+                            }
                         }
                     }
                 }
+
+                // Audio Interruption Notice Banner
+                val isInterrupted = (state as? RecordingState.Paused)?.isInterrupted == true
+                if (isInterrupted) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = RecovoSpacing.medium)
+                            .testTag("recording_interruption_banner"),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(RecovoSpacing.medium),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            Spacer(modifier = Modifier.width(RecovoSpacing.small))
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.interruption_paused_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                                Text(
+                                    text = stringResource(R.string.interruption_paused_desc),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Quality Card / Locked Badge
+                RecordingQualityCard(
+                    selectedQuality = selectedQuality,
+                    isRecordingActive = isActivelyRecording,
+                    onSelectQuality = { viewModel.setQuality(it) },
+                    modifier = Modifier.padding(bottom = RecovoSpacing.small)
+                )
+
+                // Optional Pre-recording Custom Title
+                if (!isActivelyRecording) {
+                    Spacer(modifier = Modifier.height(RecovoSpacing.extraSmall))
+                    OutlinedTextField(
+                        value = customTitle,
+                        onValueChange = { customTitle = it },
+                        label = { Text(stringResource(R.string.recording_title_optional)) },
+                        placeholder = { Text(stringResource(R.string.recording_title_hint)) },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("record_custom_title_input"),
+                        trailingIcon = {
+                            if (customTitle.isNotEmpty()) {
+                                IconButton(onClick = { customTitle = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear Title")
+                                }
+                            }
+                        }
+                    )
+                }
             }
 
-            // Center Display (Timer, State & Meter)
+            // Center Section: Pulse Visualizer, Dynamic Waveform & High-Precision Timer
             Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .padding(vertical = RecovoSpacing.medium),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -227,7 +308,7 @@ fun RecordScreen(
                 // Studio Pulse Visualizer
                 Box(
                     modifier = Modifier
-                        .size(100.dp)
+                        .size(96.dp)
                         .clip(CircleShape)
                         .background(
                             when (state) {
@@ -246,16 +327,16 @@ fun RecordScreen(
                             is RecordingState.Paused -> MaterialTheme.colorScheme.tertiary
                             else -> MaterialTheme.colorScheme.primary
                         },
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(44.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(RecovoSpacing.large))
+                Spacer(modifier = Modifier.height(RecovoSpacing.medium))
 
-                // High-precision formatted timer
+                // High-Precision Formatted Timer
                 Text(
                     text = formatTimer(elapsedMs),
-                    fontSize = 44.sp,
+                    fontSize = 42.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground,
@@ -264,12 +345,12 @@ fun RecordScreen(
 
                 Spacer(modifier = Modifier.height(RecovoSpacing.extraSmall))
 
-                // State Indicator Badge
+                // State Indicator Label
                 val stateLabel = when (state) {
                     is RecordingState.Idle -> "READY TO RECORD"
                     is RecordingState.Preparing -> "PREPARING..."
                     is RecordingState.Recording -> "RECORDING"
-                    is RecordingState.Paused -> "PAUSED"
+                    is RecordingState.Paused -> if ((state as RecordingState.Paused).isInterrupted) "PAUSED (INTERRUPTED)" else "PAUSED"
                     is RecordingState.Stopping -> "SAVING..."
                     is RecordingState.Saved -> "SAVED SUCCESSFULLY"
                     is RecordingState.Error -> "ERROR OCCURRED"
@@ -288,27 +369,27 @@ fun RecordScreen(
                     fontWeight = FontWeight.SemiBold
                 )
 
-                Spacer(modifier = Modifier.height(RecovoSpacing.medium))
+                Spacer(modifier = Modifier.height(RecovoSpacing.small))
 
-                // Basic Amplitude Meter
-                AnimatedVisibility(visible = state is RecordingState.Recording) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth(0.7f)
-                            .padding(top = RecovoSpacing.small),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        val normalizedAmp = (currentAmp.toFloat() / 32767f).coerceIn(0f, 1f)
-                        LinearProgressIndicator(
-                            progress = { normalizedAmp },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                                .clip(RoundedCornerShape(4.dp)),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    }
+                // Dynamic Audio Waveform Equalizer
+                DynamicWaveformVisualizer(
+                    amplitude = currentAmp,
+                    isRecording = state is RecordingState.Recording,
+                    isPaused = state is RecordingState.Paused,
+                    modifier = Modifier.padding(vertical = RecovoSpacing.small)
+                )
+
+                // Real-time Estimated File Size Badge
+                AnimatedVisibility(
+                    visible = isActivelyRecording,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    EstimatedFileSizeBadge(
+                        bitRate = selectedQuality.bitRate,
+                        elapsedMs = elapsedMs,
+                        modifier = Modifier.padding(top = RecovoSpacing.small)
+                    )
                 }
 
                 // Error Message if any
@@ -322,11 +403,11 @@ fun RecordScreen(
                 }
             }
 
-            // Controls Bar (Bottom)
+            // Bottom Section: Recording Controls
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = RecovoSpacing.large),
+                    .padding(bottom = RecovoSpacing.medium),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 when (state) {
@@ -338,7 +419,7 @@ fun RecordScreen(
                                         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                                         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                     }
-                                    viewModel.startRecording()
+                                    viewModel.startRecording(customTitle.trim().ifEmpty { null })
                                 } else {
                                     micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                                 }
@@ -367,9 +448,9 @@ fun RecordScreen(
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Cancel button
+                            // Cancel button (prompts discard dialog)
                             OutlinedButton(
-                                onClick = { viewModel.cancelRecording() },
+                                onClick = { showDiscardConfirmDialog = true },
                                 modifier = Modifier
                                     .height(RecovoDimensions.minTouchTarget)
                                     .testTag("record_cancel_button")
@@ -381,7 +462,7 @@ fun RecordScreen(
 
                             // Pause button
                             FilledTonalButton(
-                                onClick = { viewModel.pauseRecording() },
+                                onClick = { viewModel.pauseRecording(isInterrupted = false) },
                                 modifier = Modifier
                                     .height(RecovoDimensions.minTouchTarget)
                                     .testTag("record_pause_button")
@@ -397,9 +478,7 @@ fun RecordScreen(
                                 modifier = Modifier
                                     .height(RecovoDimensions.minTouchTarget)
                                     .testTag("record_stop_button"),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
-                                )
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
                                 Icon(imageVector = Icons.Default.Stop, contentDescription = "Stop")
                                 Spacer(modifier = Modifier.width(RecovoSpacing.extraSmall))
@@ -414,9 +493,9 @@ fun RecordScreen(
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Cancel button
+                            // Cancel button (prompts discard dialog)
                             OutlinedButton(
-                                onClick = { viewModel.cancelRecording() },
+                                onClick = { showDiscardConfirmDialog = true },
                                 modifier = Modifier
                                     .height(RecovoDimensions.minTouchTarget)
                                     .testTag("record_cancel_button")
@@ -432,9 +511,7 @@ fun RecordScreen(
                                 modifier = Modifier
                                     .height(RecovoDimensions.minTouchTarget)
                                     .testTag("record_resume_button"),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.error
-                                )
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                             ) {
                                 Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Resume")
                                 Spacer(modifier = Modifier.width(RecovoSpacing.extraSmall))
@@ -465,6 +542,38 @@ fun RecordScreen(
                 }
             }
         }
+    }
+
+    // Discard Recording Confirmation Dialog
+    if (showDiscardConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardConfirmDialog = false },
+            title = { Text(stringResource(R.string.recording_discard_title)) },
+            text = { Text(stringResource(R.string.recording_discard_message)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDiscardConfirmDialog = false
+                        viewModel.cancelRecording()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ),
+                    modifier = Modifier.testTag("record_discard_confirm_button")
+                ) {
+                    Text(stringResource(R.string.discard))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showDiscardConfirmDialog = false },
+                    modifier = Modifier.testTag("record_discard_cancel_button")
+                ) {
+                    Text(stringResource(R.string.keep_recording))
+                }
+            }
+        )
     }
 
     // Permission Rationale / Settings Dialog
@@ -514,7 +623,6 @@ fun RecordScreen(
                 OutlinedButton(
                     onClick = {
                         showBackConfirmDialog = false
-                        // Allow navigation while service continues recording in the background
                         onBack()
                     }
                 ) {

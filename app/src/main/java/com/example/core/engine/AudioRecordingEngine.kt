@@ -11,7 +11,7 @@ interface AudioRecordingEngine {
     fun getAmplitude(): Int
 
     suspend fun start(targetFile: File, config: AudioConfig = AudioConfig()): Result<Unit>
-    suspend fun pause(): Result<Unit>
+    suspend fun pause(isInterrupted: Boolean = false): Result<Unit>
     suspend fun resume(): Result<Unit>
     suspend fun stop(): Result<RecordingSessionResult>
     suspend fun cancel(): Result<Unit>

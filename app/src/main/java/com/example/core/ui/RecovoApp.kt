@@ -35,7 +35,8 @@ fun RecovoApp(
         }
         composable(RecovoDestinations.LIBRARY) {
             LibraryScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onNavigateToRecord = { navController.navigate(RecovoDestinations.RECORD) }
             )
         }
     }

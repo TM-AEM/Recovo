@@ -22,7 +22,8 @@ import androidx.room.PrimaryKey
     indices = [
         Index(value = ["folderId"]),
         Index(value = ["createdAt"]),
-        Index(value = ["displayName"])
+        Index(value = ["displayName"]),
+        Index(value = ["isFavorite"])
     ]
 )
 data class RecordingEntity(
@@ -39,6 +40,7 @@ data class RecordingEntity(
     val bitRate: Int,
     val channelCount: Int,
     val folderId: Long? = null,
+    val isFavorite: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val modifiedAt: Long = System.currentTimeMillis()
 )

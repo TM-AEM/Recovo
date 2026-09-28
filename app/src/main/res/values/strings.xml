@@ -1,3 +1,76 @@
 <resources>
     <string name="app_name">Recovo</string>
+    <string name="library_title">Audio Library</string>
+    <string name="tab_all">All</string>
+    <string name="tab_favorites">Favorites</string>
+    <string name="tab_folders">Folders</string>
+    <string name="tab_tags">Tags</string>
+
+    <!-- Search -->
+    <string name="search_recordings_hint">Search recordings, folders, tags…</string>
+    <string name="clear_search">Clear search</string>
+    <string name="no_recordings_found">No recordings found</string>
+    <string name="no_recordings_found_desc">No recordings match your search query or filter.</string>
+    <string name="clear_filter">Clear Filter</string>
+
+    <!-- Sorting -->
+    <string name="sort_by">Sort by</string>
+    <string name="sort_newest">Newest first</string>
+    <string name="sort_oldest">Oldest first</string>
+    <string name="sort_name_az">Name (A–Z)</string>
+    <string name="sort_name_za">Name (Z–A)</string>
+    <string name="sort_duration">Duration</string>
+    <string name="sort_size">File size</string>
+
+    <!-- Folders -->
+    <string name="folders_title">Folders</string>
+    <string name="new_folder">New Folder</string>
+    <string name="create_folder">Create Folder</string>
+    <string name="rename_folder">Rename Folder</string>
+    <string name="delete_folder">Delete Folder</string>
+    <string name="folder_name_hint">Folder name</string>
+    <string name="delete_folder_message">Are you sure you want to delete this folder? Recordings inside it will NOT be deleted.</string>
+    <string name="no_folders">No Folders Created</string>
+    <string name="no_folders_desc">Create folders to categorize and organize your recordings.</string>
+    <string name="move_to_folder">Move to Folder</string>
+    <string name="none_folder">None (No folder)</string>
+
+    <!-- Tags -->
+    <string name="tags_title">Tags</string>
+    <string name="new_tag">New Tag</string>
+    <string name="create_tag">Create Tag</string>
+    <string name="rename_tag">Rename Tag</string>
+    <string name="delete_tag">Delete Tag</string>
+    <string name="tag_name_hint">Tag name</string>
+    <string name="delete_tag_message">Are you sure you want to delete this tag? Recordings will NOT be deleted.</string>
+    <string name="no_tags">No Tags Created</string>
+    <string name="no_tags_desc">Create tags to label and quickly find related recordings.</string>
+    <string name="manage_tags">Manage Tags</string>
+
+    <!-- Actions & Dialogs -->
+    <string name="rename_recording">Rename Recording</string>
+    <string name="recording_name_hint">Recording name</string>
+    <string name="favorite">Favorite</string>
+    <string name="unfavorite">Unfavorite</string>
+    <string name="delete_recording_title">Delete Recording</string>
+    <string name="delete_selected_title">Delete Selected</string>
+    <string name="cancel">Cancel</string>
+    <string name="save">Save</string>
+    <string name="delete">Delete</string>
+    <string name="select_all">Select all</string>
+    <string name="deselect_all">Deselect all</string>
+
+    <!-- Phase 10 Recording UX & Quality -->
+    <string name="recording_quality_title">Recording Quality</string>
+    <string name="recording_quality_standard">Standard</string>
+    <string name="recording_quality_high">High</string>
+    <string name="recording_quality_maximum">Maximum</string>
+    <string name="recording_discard_title">Discard Recording?</string>
+    <string name="recording_discard_message">Are you sure you want to discard this recording? The recorded audio file will be permanently deleted.</string>
+    <string name="discard">Discard</string>
+    <string name="keep_recording">Keep Recording</string>
+    <string name="interruption_paused_title">Recording Paused (Call / Interruption)</string>
+    <string name="interruption_paused_desc">Recording paused automatically due to another audio app or incoming call. Tap Resume to continue.</string>
+    <string name="recording_title_optional">Recording Title (Optional)</string>
+    <string name="recording_title_hint">e.g. Meeting Note</string>
 </resources>

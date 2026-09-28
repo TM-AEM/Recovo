@@ -2,6 +2,8 @@ package com.example.feature.record
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.core.engine.RecordingPreferences
+import com.example.core.engine.RecordingQuality
 import com.example.core.engine.RecordingState
 import com.example.core.service.RecordingController
 import kotlinx.coroutines.flow.SharingStarted
@@ -9,7 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 
 class RecordViewModel(
-    private val controller: RecordingController
+    private val controller: RecordingController,
+    private val preferences: RecordingPreferences = RecordingPreferences(controller.context)
 ) : ViewModel() {
 
     val recordingState: StateFlow<RecordingState> = controller.recordingState
@@ -19,12 +22,18 @@ class RecordViewModel(
             initialValue = RecordingState.Idle
         )
 
-    fun startRecording(customName: String? = null) {
-        controller.startRecording(customName)
+    val selectedQuality: StateFlow<RecordingQuality> = preferences.selectedQualityFlow
+
+    fun setQuality(quality: RecordingQuality) {
+        preferences.setSelectedQuality(quality)
     }
 
-    fun pauseRecording() {
-        controller.pauseRecording()
+    fun startRecording(customName: String? = null) {
+        controller.startRecording(customName, selectedQuality.value.id)
+    }
+
+    fun pauseRecording(isInterrupted: Boolean = false) {
+        controller.pauseRecording(isInterrupted)
     }
 
     fun resumeRecording() {
@@ -47,3 +56,4 @@ class RecordViewModel(
         super.onCleared()
     }
 }
+

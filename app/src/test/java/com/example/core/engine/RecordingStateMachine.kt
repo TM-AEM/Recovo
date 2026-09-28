@@ -49,7 +49,7 @@ class RecordingStateMachine(
         return result
     }
 
-    suspend fun pause(): Result<Unit> {
+    suspend fun pause(isInterrupted: Boolean = false): Result<Unit> {
         val current = _state.value
         if (current !is RecordingState.Recording) {
             return Result.failure(IllegalStateException("Invalid transition to PAUSE from state: $current"))
@@ -60,7 +60,8 @@ class RecordingStateMachine(
             _state.value = RecordingState.Paused(
                 file = current.file,
                 elapsedMs = current.elapsedMs,
-                amplitude = 0
+                amplitude = 0,
+                isInterrupted = isInterrupted
             )
         }
         return result

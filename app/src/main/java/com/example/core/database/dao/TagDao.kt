@@ -24,8 +24,29 @@ interface TagDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertCrossRef(crossRef: RecordingTagCrossRef)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertCrossRefs(crossRefs: List<RecordingTagCrossRef>)
+
     @Delete
     suspend fun deleteCrossRef(crossRef: RecordingTagCrossRef)
+
+    @Query("SELECT * FROM recording_tag_cross_ref")
+    fun observeAllCrossRefs(): Flow<List<RecordingTagCrossRef>>
+
+    @Query("DELETE FROM recording_tag_cross_ref WHERE recordingId = :recordingId")
+    suspend fun deleteCrossRefsForRecording(recordingId: Long)
+
+    @Query("DELETE FROM recording_tag_cross_ref WHERE tagId = :tagId")
+    suspend fun deleteCrossRefsForTag(tagId: Long)
+
+    @Query("SELECT * FROM tags WHERE name = :name COLLATE NOCASE LIMIT 1")
+    suspend fun getTagByName(name: String): TagEntity?
+
+    @Query("SELECT * FROM tags WHERE id = :id")
+    suspend fun getById(id: Long): TagEntity?
+
+    @Query("UPDATE tags SET name = :name WHERE id = :id")
+    suspend fun renameTag(id: Long, name: String)
 
     @Query(
         """
@@ -36,4 +57,14 @@ interface TagDao {
         """
     )
     fun observeTagsForRecording(recordingId: Long): Flow<List<TagEntity>>
+
+    @Query(
+        """
+        SELECT t.* FROM tags t
+        INNER JOIN recording_tag_cross_ref rtc ON t.id = rtc.tagId
+        WHERE rtc.recordingId = :recordingId
+        ORDER BY t.name COLLATE NOCASE ASC
+        """
+    )
+    suspend fun getTagsForRecording(recordingId: Long): List<TagEntity>
 }

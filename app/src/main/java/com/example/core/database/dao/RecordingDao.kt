@@ -39,11 +39,17 @@ interface RecordingDao {
     @Query("SELECT * FROM recordings ORDER BY displayName COLLATE NOCASE ASC")
     fun observeAllByName(): Flow<List<RecordingEntity>>
 
+    @Query("SELECT * FROM recordings ORDER BY displayName COLLATE NOCASE DESC")
+    fun observeAllByNameDesc(): Flow<List<RecordingEntity>>
+
     @Query("SELECT * FROM recordings ORDER BY durationMs DESC")
     fun observeAllByDuration(): Flow<List<RecordingEntity>>
 
     @Query("SELECT * FROM recordings ORDER BY fileSizeBytes DESC")
     fun observeAllBySize(): Flow<List<RecordingEntity>>
+
+    @Query("SELECT * FROM recordings WHERE isFavorite = 1 ORDER BY createdAt DESC")
+    fun observeFavorites(): Flow<List<RecordingEntity>>
 
     @Query("SELECT * FROM recordings WHERE displayName LIKE '%' || :query || '%' ORDER BY createdAt DESC")
     fun searchRecordings(query: String): Flow<List<RecordingEntity>>
@@ -53,4 +59,22 @@ interface RecordingDao {
 
     @Query("SELECT COUNT(*) FROM recordings")
     fun observeRecordingCount(): Flow<Int>
+
+    @Query("UPDATE recordings SET isFavorite = :isFavorite WHERE id = :id")
+    suspend fun setFavorite(id: Long, isFavorite: Boolean)
+
+    @Query("UPDATE recordings SET isFavorite = :isFavorite WHERE id IN (:recordingIds)")
+    suspend fun updateFavoriteStatus(recordingIds: List<Long>, isFavorite: Boolean)
+
+    @Query("UPDATE recordings SET folderId = :folderId WHERE id = :id")
+    suspend fun setFolder(id: Long, folderId: Long?)
+
+    @Query("UPDATE recordings SET folderId = :folderId WHERE id IN (:recordingIds)")
+    suspend fun updateFolderForRecordings(recordingIds: List<Long>, folderId: Long?)
+
+    @Query("UPDATE recordings SET folderId = NULL WHERE folderId = :folderId")
+    suspend fun clearFolderIdForRecordings(folderId: Long)
+
+    @Query("UPDATE recordings SET displayName = :displayName, modifiedAt = :modifiedAt WHERE id = :id")
+    suspend fun renameRecording(id: Long, displayName: String, modifiedAt: Long)
 }

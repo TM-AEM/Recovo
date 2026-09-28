@@ -29,4 +29,10 @@ interface FolderDao {
 
     @Query("SELECT * FROM folders WHERE id = :id")
     suspend fun getById(id: Long): FolderEntity?
+
+    @Query("SELECT * FROM folders WHERE name = :name COLLATE NOCASE LIMIT 1")
+    suspend fun getFolderByName(name: String): FolderEntity?
+
+    @Query("UPDATE folders SET name = :name, modifiedAt = :modifiedAt WHERE id = :id")
+    suspend fun renameFolder(id: Long, name: String, modifiedAt: Long)
 }

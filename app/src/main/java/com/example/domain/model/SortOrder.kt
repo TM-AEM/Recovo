@@ -4,6 +4,7 @@ enum class SortOrder {
     NEWEST,
     OLDEST,
     NAME,
+    NAME_DESC,
     DURATION,
     SIZE
 }

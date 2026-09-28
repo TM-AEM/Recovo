@@ -270,4 +270,189 @@ class RecovoDatabaseTest {
         assertEquals(1, tagsForRec.size)
         assertEquals("Urgent", tagsForRec[0].name)
     }
+
+    @Test
+    fun favoriteOperations() = runTest {
+        val recId = recordingDao.insert(
+            RecordingEntity(
+                fileName = "REC_FAV.m4a",
+                displayName = "Important Speech",
+                filePath = "/path/FAV.m4a",
+                mimeType = "audio/mp4",
+                format = "M4A",
+                durationMs = 5000L,
+                fileSizeBytes = 5000L,
+                sampleRate = 44100,
+                bitRate = 128000,
+                channelCount = 1,
+                isFavorite = false
+            )
+        )
+
+        var loaded = recordingDao.getById(recId)!!
+        assertEquals(false, loaded.isFavorite)
+
+        // Set favorite = true
+        recordingDao.setFavorite(recId, true)
+        loaded = recordingDao.getById(recId)!!
+        assertEquals(true, loaded.isFavorite)
+
+        val favorites = recordingDao.observeFavorites().first()
+        assertEquals(1, favorites.size)
+        assertEquals("Important Speech", favorites[0].displayName)
+
+        // Set favorite = false
+        recordingDao.setFavorite(recId, false)
+        val favoritesEmpty = recordingDao.observeFavorites().first()
+        assertTrue(favoritesEmpty.isEmpty())
+    }
+
+    @Test
+    fun folderDeletionDoesNotDeleteRecordings() = runTest {
+        val folderId = folderDao.insert(FolderEntity(name = "Client Calls"))
+        val recId = recordingDao.insert(
+            RecordingEntity(
+                fileName = "REC_CALL.m4a",
+                displayName = "Client Call 1",
+                filePath = "/path/CALL.m4a",
+                mimeType = "audio/mp4",
+                format = "M4A",
+                durationMs = 45000L,
+                fileSizeBytes = 200000L,
+                sampleRate = 44100,
+                bitRate = 128000,
+                channelCount = 1,
+                folderId = folderId
+            )
+        )
+
+        // Ensure recording is in folder
+        assertEquals(folderId, recordingDao.getById(recId)?.folderId)
+
+        // Clear folderId for recordings in this folder and delete folder
+        recordingDao.clearFolderIdForRecordings(folderId)
+        folderDao.deleteById(folderId)
+
+        // Recording must STILL exist, but folderId must be null
+        val preservedRecording = recordingDao.getById(recId)
+        assertNotNull(preservedRecording)
+        assertNull(preservedRecording?.folderId)
+    }
+
+    @Test
+    fun tagDeletionDoesNotDeleteRecordings() = runTest {
+        val tagId = tagDao.insert(TagEntity(name = "Review"))
+        val recId = recordingDao.insert(
+            RecordingEntity(
+                fileName = "REC_REV.m4a",
+                displayName = "Review Audio",
+                filePath = "/path/REV.m4a",
+                mimeType = "audio/mp4",
+                format = "M4A",
+                durationMs = 15000L,
+                fileSizeBytes = 50000L,
+                sampleRate = 44100,
+                bitRate = 128000,
+                channelCount = 1
+            )
+        )
+        tagDao.insertCrossRef(RecordingTagCrossRef(recordingId = recId, tagId = tagId))
+
+        // Cross refs exist
+        assertEquals(1, tagDao.observeTagsForRecording(recId).first().size)
+
+        // Delete tag cross refs and delete tag
+        tagDao.deleteCrossRefsForTag(tagId)
+        val tagEntity = tagDao.getTagByName("Review")
+        if (tagEntity != null) {
+            tagDao.delete(tagEntity)
+        }
+
+        // Recording must STILL exist in database
+        val recStillExists = recordingDao.getById(recId)
+        assertNotNull(recStillExists)
+        // Tag relationships are gone
+        assertTrue(tagDao.observeTagsForRecording(recId).first().isEmpty())
+    }
+
+    @Test
+    fun renameRecordingDisplayNameOnly() = runTest {
+        val originalPath = "/original/path/audio.m4a"
+        val recId = recordingDao.insert(
+            RecordingEntity(
+                fileName = "audio.m4a",
+                displayName = "Original Name",
+                filePath = originalPath,
+                mimeType = "audio/mp4",
+                format = "M4A",
+                durationMs = 10000L,
+                fileSizeBytes = 40000L,
+                sampleRate = 44100,
+                bitRate = 128000,
+                channelCount = 1,
+                createdAt = 5000L
+            )
+        )
+
+        val updatedTime = 12000L
+        recordingDao.renameRecording(recId, "Renamed Name", updatedTime)
+
+        val retrieved = recordingDao.getById(recId)!!
+        assertEquals("Renamed Name", retrieved.displayName)
+        assertEquals(recId, retrieved.id)
+        assertEquals(originalPath, retrieved.filePath)
+        assertEquals("audio.m4a", retrieved.fileName)
+        assertEquals(5000L, retrieved.createdAt)
+        assertEquals(updatedTime, retrieved.modifiedAt)
+    }
+
+    @Test
+    fun migration1to2ExecutesProperly() {
+        // Test that migration SQL adds the isFavorite column successfully
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val dbHelper = androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory()
+            .create(
+                androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
+                    .name("test_migration.db")
+                    .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(1) {
+                        override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                            db.execSQL("""
+                                CREATE TABLE IF NOT EXISTS `recordings` (
+                                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                                    `fileName` TEXT NOT NULL,
+                                    `displayName` TEXT NOT NULL,
+                                    `filePath` TEXT NOT NULL,
+                                    `mimeType` TEXT NOT NULL,
+                                    `format` TEXT NOT NULL,
+                                    `durationMs` INTEGER NOT NULL,
+                                    `fileSizeBytes` INTEGER NOT NULL,
+                                    `sampleRate` INTEGER NOT NULL,
+                                    `bitRate` INTEGER NOT NULL,
+                                    `channelCount` INTEGER NOT NULL,
+                                    `folderId` INTEGER,
+                                    `createdAt` INTEGER NOT NULL,
+                                    `modifiedAt` INTEGER NOT NULL
+                                )
+                            """.trimIndent())
+                        }
+                        override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+                    })
+                    .build()
+            )
+
+        val writableDb = dbHelper.writableDatabase
+        // Run MIGRATION_1_2
+        RecovoDatabase.MIGRATION_1_2.migrate(writableDb)
+
+        // Verify column isFavorite was added by inserting a row with isFavorite
+        writableDb.execSQL(
+            "INSERT INTO recordings (fileName, displayName, filePath, mimeType, format, durationMs, fileSizeBytes, sampleRate, bitRate, channelCount, createdAt, modifiedAt, isFavorite) VALUES ('test.m4a', 'Test', '/p/test.m4a', 'audio/mp4', 'M4A', 1000, 1000, 44100, 128000, 1, 100, 100, 1)"
+        )
+        val cursor = writableDb.query("SELECT isFavorite FROM recordings WHERE fileName = 'test.m4a'")
+        assertTrue(cursor.moveToFirst())
+        assertEquals(1, cursor.getInt(0))
+        cursor.close()
+        writableDb.close()
+        context.deleteDatabase("test_migration.db")
+    }
 }

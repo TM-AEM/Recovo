@@ -17,7 +17,8 @@ sealed class RecordingState {
     data class Paused(
         val file: File,
         val elapsedMs: Long,
-        val amplitude: Int = 0
+        val amplitude: Int = 0,
+        val isInterrupted: Boolean = false
     ) : RecordingState()
     object Stopping : RecordingState()
     data class Saved(val file: File, val recordingId: Long) : RecordingState()
