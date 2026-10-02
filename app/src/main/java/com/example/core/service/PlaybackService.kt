@@ -39,6 +39,7 @@ class PlaybackService : Service() {
     private lateinit var audioPlayer: AudioPlayer
     private var stateJob: Job? = null
     private var isReceiverRegistered = false
+    private var isForeground = false
 
     private val becomingNoisyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -113,7 +114,11 @@ class PlaybackService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
-                // Service launched to ensure foreground playback
+                // Ensure immediate foreground transition if a recording is currently active
+                val currentState = audioPlayer.playbackState.value
+                if (currentState.currentRecording != null) {
+                    handlePlaybackStateChange(currentState)
+                }
             }
             ACTION_PAUSE -> audioPlayer.pause()
             ACTION_RESUME -> audioPlayer.resume()
@@ -128,7 +133,10 @@ class PlaybackService : Service() {
         val recording = state.currentRecording
         if (recording == null) {
             unregisterNoisyReceiver()
-            stopForeground(STOP_FOREGROUND_REMOVE)
+            if (isForeground) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                isForeground = false
+            }
             stopSelf()
             return
         }
@@ -136,17 +144,25 @@ class PlaybackService : Service() {
         val notification = buildMediaNotification(state)
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
 
+        if (!isForeground || state.isPlaying) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    startForeground(
+                        NOTIFICATION_ID,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                    )
+                } else {
+                    startForeground(NOTIFICATION_ID, notification)
+                }
+                isForeground = true
+            } catch (e: Exception) {
+                notificationManager?.notify(NOTIFICATION_ID, notification)
+            }
+        }
+
         if (state.isPlaying) {
             registerNoisyReceiver()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(
-                    NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-                )
-            } else {
-                startForeground(NOTIFICATION_ID, notification)
-            }
         } else {
             unregisterNoisyReceiver()
             // On pause, update the notification with Play button
@@ -264,7 +280,7 @@ class PlaybackService : Service() {
                     this,
                     becomingNoisyReceiver,
                     filter,
-                    ContextCompat.RECEIVER_EXPORTED
+                    ContextCompat.RECEIVER_NOT_EXPORTED
                 )
                 isReceiverRegistered = true
             } catch (ignored: Exception) {
@@ -300,6 +316,10 @@ class PlaybackService : Service() {
 
     override fun onDestroy() {
         unregisterNoisyReceiver()
+        if (isForeground) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            isForeground = false
+        }
         stateJob?.cancel()
         serviceScope.cancel()
         super.onDestroy()

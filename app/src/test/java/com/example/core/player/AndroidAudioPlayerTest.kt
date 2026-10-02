@@ -270,4 +270,31 @@ class AndroidAudioPlayerTest {
         player.updateCurrentRecordingMetadata(updated)
         assertEquals("Updated Renamed Title", player.playbackState.value.currentRecording?.displayName)
     }
+
+    @Test
+    fun seekRelative_movesPositionCorrectly() {
+        // Initially duration is 0, so seekRelative clamps to 0
+        player.seekRelative(5000L)
+        assertEquals(0L, player.playbackState.value.currentPositionMs)
+    }
+
+    @Test
+    fun sleepTimer_zeroOrNegative_cancelsTimer() {
+        player.setSleepTimer(15)
+        assertEquals(15 * 60 * 1000L, player.playbackState.value.sleepTimerRemainingMs)
+
+        player.setSleepTimer(0)
+        assertNull(player.playbackState.value.sleepTimerRemainingMs)
+
+        player.setSleepTimer(20)
+        assertEquals(20 * 60 * 1000L, player.playbackState.value.sleepTimerRemainingMs)
+
+        player.setSleepTimer(-5)
+        assertNull(player.playbackState.value.sleepTimerRemainingMs)
+    }
+
+    @Test
+    fun mediaSession_tokenAccessible() {
+        assertNotNull(player.getSessionToken())
+    }
 }

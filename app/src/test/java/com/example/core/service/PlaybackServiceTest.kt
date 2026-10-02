@@ -47,4 +47,22 @@ class PlaybackServiceTest {
 
         serviceController.destroy()
     }
+
+    @Test
+    fun onStartCommand_dispatchesToPlayerCleanly() {
+        val serviceController = Robolectric.buildService(PlaybackService::class.java)
+        val service = serviceController.create().get()
+
+        val context = ApplicationProvider.getApplicationContext<Context>()
+
+        // Dispatch various playback commands without crashing
+        service.onStartCommand(PlaybackService.startServiceIntent(context), 0, 1)
+        service.onStartCommand(PlaybackService.pauseIntent(context), 0, 2)
+        service.onStartCommand(PlaybackService.resumeIntent(context), 0, 3)
+        service.onStartCommand(PlaybackService.nextIntent(context), 0, 4)
+        service.onStartCommand(PlaybackService.prevIntent(context), 0, 5)
+        service.onStartCommand(PlaybackService.stopIntent(context), 0, 6)
+
+        serviceController.destroy()
+    }
 }

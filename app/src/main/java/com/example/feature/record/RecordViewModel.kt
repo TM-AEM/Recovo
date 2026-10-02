@@ -1,7 +1,12 @@
 package com.example.feature.record
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.CreationExtras
+import android.content.Context
 import com.example.core.engine.RecordingPreferences
 import com.example.core.engine.RecordingQuality
 import com.example.core.engine.RecordingState
@@ -12,14 +17,15 @@ import kotlinx.coroutines.flow.stateIn
 
 class RecordViewModel(
     private val controller: RecordingController,
-    private val preferences: RecordingPreferences = RecordingPreferences(controller.context)
+    private val preferences: RecordingPreferences = RecordingPreferences(controller.context),
+    private val savedStateHandle: SavedStateHandle? = null
 ) : ViewModel() {
 
     val recordingState: StateFlow<RecordingState> = controller.recordingState
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = RecordingState.Idle
+            initialValue = controller.recordingState.value
         )
 
     val selectedQuality: StateFlow<RecordingQuality> = preferences.selectedQualityFlow
@@ -53,7 +59,25 @@ class RecordViewModel(
     }
 
     override fun onCleared() {
+        controller.release()
         super.onCleared()
+    }
+
+    class Factory(private val context: Context) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            val appContext = context.applicationContext
+            val controller = RecordingController(appContext)
+            return RecordViewModel(controller) as T
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
+            val appContext = context.applicationContext
+            val controller = RecordingController(appContext)
+            val savedStateHandle = extras.createSavedStateHandle()
+            return RecordViewModel(controller, savedStateHandle = savedStateHandle) as T
+        }
     }
 }
 

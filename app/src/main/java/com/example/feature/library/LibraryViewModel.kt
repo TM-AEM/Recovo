@@ -1,9 +1,12 @@
 package com.example.feature.library
 
 import android.content.Context
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.CreationExtras
 import com.example.core.database.RecovoDatabase
 import com.example.core.database.model.FolderEntity
 import com.example.core.database.model.RecordingEntity
@@ -35,17 +38,22 @@ import java.util.Locale
 @OptIn(FlowPreview::class)
 class LibraryViewModel(
     private val recordingRepository: RecordingRepository,
-    private val audioPlayer: AudioPlayer
+    private val audioPlayer: AudioPlayer,
+    private val savedStateHandle: SavedStateHandle? = null
 ) : ViewModel() {
 
     val playbackState: StateFlow<PlaybackState> = audioPlayer.playbackState
 
-    private val _searchQuery = MutableStateFlow("")
+    private val _searchQuery = MutableStateFlow(savedStateHandle?.get<String>(KEY_SEARCH_QUERY) ?: "")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    private val _debouncedSearchQuery = MutableStateFlow("")
+    private val _debouncedSearchQuery = MutableStateFlow(savedStateHandle?.get<String>(KEY_SEARCH_QUERY) ?: "")
 
-    private val _selectedTab = MutableStateFlow(LibraryTab.ALL)
+    private val _selectedTab = MutableStateFlow(
+        savedStateHandle?.get<String>(KEY_SELECTED_TAB)?.let {
+            runCatching { LibraryTab.valueOf(it) }.getOrNull()
+        } ?: LibraryTab.ALL
+    )
     val selectedTab: StateFlow<LibraryTab> = _selectedTab.asStateFlow()
 
     private val _selectedFolder = MutableStateFlow<FolderEntity?>(null)
@@ -54,7 +62,11 @@ class LibraryViewModel(
     private val _selectedTag = MutableStateFlow<TagEntity?>(null)
     val selectedTag: StateFlow<TagEntity?> = _selectedTag.asStateFlow()
 
-    private val _sortOrder = MutableStateFlow(SortOrder.NEWEST)
+    private val _sortOrder = MutableStateFlow(
+        savedStateHandle?.get<String>(KEY_SORT_ORDER)?.let {
+            runCatching { SortOrder.valueOf(it) }.getOrNull()
+        } ?: SortOrder.NEWEST
+    )
     val sortOrder: StateFlow<SortOrder> = _sortOrder.asStateFlow()
 
     private val _selectedRecordingIds = MutableStateFlow<Set<Long>>(emptySet())
@@ -251,6 +263,7 @@ class LibraryViewModel(
 
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
+        savedStateHandle?.set(KEY_SEARCH_QUERY, query)
         if (query.isBlank()) {
             _debouncedSearchQuery.value = ""
         }
@@ -258,11 +271,13 @@ class LibraryViewModel(
 
     fun clearSearchQuery() {
         _searchQuery.value = ""
+        savedStateHandle?.set(KEY_SEARCH_QUERY, "")
         _debouncedSearchQuery.value = ""
     }
 
     fun selectTab(tab: LibraryTab) {
         _selectedTab.value = tab
+        savedStateHandle?.set(KEY_SELECTED_TAB, tab.name)
         if (tab != LibraryTab.FOLDERS) {
             _selectedFolder.value = null
         }
@@ -281,6 +296,7 @@ class LibraryViewModel(
 
     fun setSortOrder(order: SortOrder) {
         _sortOrder.value = order
+        savedStateHandle?.set(KEY_SORT_ORDER, order.name)
     }
 
     // Favorites
@@ -558,6 +574,10 @@ class LibraryViewModel(
     }
 
     companion object {
+        private const val KEY_SEARCH_QUERY = "key_library_search_query"
+        private const val KEY_SELECTED_TAB = "key_library_selected_tab"
+        private const val KEY_SORT_ORDER = "key_library_sort_order"
+
         fun formatDuration(durationMs: Long): String {
             val totalSecs = (durationMs / 1000).coerceAtLeast(0)
             val minutes = totalSecs / 60
@@ -605,6 +625,23 @@ class LibraryViewModel(
             )
             val audioPlayer = AudioPlayerProvider.get(appContext)
             return LibraryViewModel(repository, audioPlayer) as T
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
+            val appContext = context.applicationContext
+            val db = RecovoDatabase.getInstance(appContext)
+            val storageManager = StorageManager(appContext)
+            val repository = RecordingRepositoryImpl(
+                recordingDao = db.recordingDao(),
+                folderDao = db.folderDao(),
+                tagDao = db.tagDao(),
+                bookmarkDao = db.bookmarkDao(),
+                storageManager = storageManager
+            )
+            val audioPlayer = AudioPlayerProvider.get(appContext)
+            val savedStateHandle = extras.createSavedStateHandle()
+            return LibraryViewModel(repository, audioPlayer, savedStateHandle) as T
         }
     }
 }

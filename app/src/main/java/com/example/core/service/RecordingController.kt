@@ -10,6 +10,7 @@ import com.example.core.engine.RecordingState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,13 +20,15 @@ import kotlinx.coroutines.launch
  * Controller bridging UI / ViewModels to the Foreground [RecordingService].
  * Survives Composable recomposition and Activity recreation.
  */
-class RecordingController(private val context: Context) {
+class RecordingController(val context: Context) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var service: RecordingService? = null
     private var isBound = false
 
-    private val _recordingState = MutableStateFlow<RecordingState>(RecordingState.Idle)
+    private val _recordingState = MutableStateFlow<RecordingState>(
+        RecordingService.getActiveService()?.recordingState?.value ?: RecordingState.Idle
+    )
     val recordingState: StateFlow<RecordingState> = _recordingState.asStateFlow()
 
     private var stateCollectionJob: kotlinx.coroutines.Job? = null
@@ -63,8 +66,8 @@ class RecordingController(private val context: Context) {
         context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
     }
 
-    fun startRecording(displayName: String? = null) {
-        val intent = RecordingService.startRecordingIntent(context, displayName)
+    fun startRecording(displayName: String? = null, qualityId: String? = null) {
+        val intent = RecordingService.startRecordingIntent(context, displayName, qualityId)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(intent)
         } else {
@@ -75,9 +78,9 @@ class RecordingController(private val context: Context) {
         }
     }
 
-    fun pauseRecording() {
-        service?.pauseRecording() ?: run {
-            val intent = RecordingService.pauseIntent(context)
+    fun pauseRecording(isInterrupted: Boolean = false) {
+        service?.pauseRecording(isInterrupted) ?: run {
+            val intent = RecordingService.pauseIntent(context, isInterrupted)
             context.startService(intent)
         }
     }
@@ -117,5 +120,10 @@ class RecordingController(private val context: Context) {
             }
             isBound = false
         }
+    }
+
+    fun release() {
+        unbind()
+        scope.cancel()
     }
 }

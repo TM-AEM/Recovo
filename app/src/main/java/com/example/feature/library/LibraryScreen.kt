@@ -88,6 +88,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -128,20 +129,20 @@ fun LibraryScreen(
     var recordingToMove by remember { mutableStateOf<RecordingEntity?>(null) }
     var recordingToManageTags by remember { mutableStateOf<RecordingUiModel?>(null) }
 
-    var showCreateFolderDialog by remember { mutableStateOf(false) }
+    var showCreateFolderDialog by rememberSaveable { mutableStateOf(false) }
     var folderToRename by remember { mutableStateOf<FolderEntity?>(null) }
     var folderToDelete by remember { mutableStateOf<FolderEntity?>(null) }
 
-    var showCreateTagDialog by remember { mutableStateOf(false) }
+    var showCreateTagDialog by rememberSaveable { mutableStateOf(false) }
     var tagToRename by remember { mutableStateOf<TagEntity?>(null) }
     var tagToDelete by remember { mutableStateOf<TagEntity?>(null) }
 
-    var showSortDialog by remember { mutableStateOf(false) }
-    var showBulkDeleteDialog by remember { mutableStateOf(false) }
-    var showBulkMoveFolderDialog by remember { mutableStateOf(false) }
+    var showSortDialog by rememberSaveable { mutableStateOf(false) }
+    var showBulkDeleteDialog by rememberSaveable { mutableStateOf(false) }
+    var showBulkMoveFolderDialog by rememberSaveable { mutableStateOf(false) }
 
-    var showSpeedDialog by remember { mutableStateOf(false) }
-    var showTimerDialog by remember { mutableStateOf(false) }
+    var showSpeedDialog by rememberSaveable { mutableStateOf(false) }
+    var showTimerDialog by rememberSaveable { mutableStateOf(false) }
 
     val state = uiState
     val isSelectionMode = (state as? LibraryUiState.Success)?.isSelectionMode == true

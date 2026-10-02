@@ -85,12 +85,11 @@ class MediaRecorderEngine(
 
             _state.value = RecordingState.Preparing
             currentFile = targetFile
-            currentConfig = config
 
             try {
-                val configuredRecorder = createAndConfigureRecorder(targetFile, config)
+                val (configuredRecorder, effectiveConfig) = createAndPrepareRecorder(targetFile, config)
                 recorder = configuredRecorder
-                configuredRecorder.prepare()
+                currentConfig = effectiveConfig
                 configuredRecorder.start()
                 durationTracker.start()
 
@@ -98,7 +97,7 @@ class MediaRecorderEngine(
                 Result.success(Unit)
             } catch (e: Exception) {
                 releaseRecorderInternal()
-                targetFile.delete()
+                if (targetFile.exists()) targetFile.delete()
                 currentFile = null
                 _state.value = RecordingState.Error("Failed to start recording: ${e.localizedMessage ?: e.javaClass.simpleName}", e)
                 Result.failure(e)
@@ -106,44 +105,80 @@ class MediaRecorderEngine(
         }
     }
 
-    private fun createAndConfigureRecorder(targetFile: File, config: AudioConfig): MediaRecorder {
-        val newRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    private fun createRecorderInstance(): MediaRecorder {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             MediaRecorder(context)
         } else {
             @Suppress("DEPRECATION")
             MediaRecorder()
         }
-
-        try {
-            newRecorder.setAudioSource(config.audioSource)
-            newRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            newRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            newRecorder.setAudioEncodingBitRate(config.bitRate)
-            newRecorder.setAudioSamplingRate(config.sampleRate)
-            newRecorder.setAudioChannels(config.channelCount)
-            newRecorder.setOutputFile(targetFile.absolutePath)
-            return newRecorder
-        } catch (e: Exception) {
-            // Fallback for devices with strict samplerate constraints (e.g. 48000Hz fallback)
-            try {
-                currentConfig = config.copy(sampleRate = 48000, bitRate = 128000, channelCount = 1)
-                newRecorder.reset()
-                newRecorder.setAudioSource(MediaRecorder.AudioSource.MIC)
-                newRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                newRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                newRecorder.setAudioSamplingRate(48000)
-                newRecorder.setAudioEncodingBitRate(128000)
-                newRecorder.setAudioChannels(1)
-                newRecorder.setOutputFile(targetFile.absolutePath)
-                return newRecorder
-            } catch (fallbackEx: Exception) {
-                newRecorder.release()
-                throw IOException("Unable to initialize MediaRecorder: ${e.message}", e)
-            }
-        }
     }
 
-    override suspend fun pause(): Result<Unit> = withContext(ioDispatcher) {
+    private fun configureRecorder(
+        recorder: MediaRecorder,
+        targetFile: File,
+        config: AudioConfig
+    ) {
+        recorder.setOnErrorListener { _, what, extra ->
+            synchronized(this@MediaRecorderEngine) {
+                _state.value = RecordingState.Error("MediaRecorder error: what=$what, extra=$extra")
+            }
+        }
+        recorder.setOnInfoListener { _, what, extra ->
+            if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED ||
+                what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED
+            ) {
+                // Max limit reached
+            }
+        }
+
+        recorder.setAudioSource(config.audioSource)
+        recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+        recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+        recorder.setAudioEncodingBitRate(config.bitRate)
+        recorder.setAudioSamplingRate(config.sampleRate)
+        recorder.setAudioChannels(config.channelCount)
+        recorder.setOutputFile(targetFile.absolutePath)
+    }
+
+    private fun createAndPrepareRecorder(
+        targetFile: File,
+        requestedConfig: AudioConfig
+    ): Pair<MediaRecorder, AudioConfig> {
+        val candidates = listOf(
+            requestedConfig,
+            if (requestedConfig.sampleRate != 48000) requestedConfig.copy(sampleRate = 48000) else requestedConfig.copy(sampleRate = 44100),
+            AudioConfig(format = RecordingFormat.M4A, audioSource = requestedConfig.audioSource, sampleRate = 48000, bitRate = 128000, channelCount = 1),
+            AudioConfig(format = RecordingFormat.M4A, audioSource = requestedConfig.audioSource, sampleRate = 44100, bitRate = 128000, channelCount = 1)
+        ).distinct()
+
+        var lastException: Exception? = null
+        for (candidate in candidates) {
+            val rec = createRecorderInstance()
+            try {
+                configureRecorder(rec, targetFile, candidate)
+                rec.prepare()
+                return Pair(rec, candidate)
+            } catch (e: Exception) {
+                lastException = e
+                try {
+                    rec.setOnErrorListener(null)
+                    rec.setOnInfoListener(null)
+                    rec.reset()
+                } catch (_: Exception) { }
+                try {
+                    rec.release()
+                } catch (_: Exception) { }
+            }
+        }
+
+        throw IOException(
+            "Unable to prepare MediaRecorder with requested config ($requestedConfig) or fallback profiles: ${lastException?.message}",
+            lastException
+        )
+    }
+
+    override suspend fun pause(isInterrupted: Boolean): Result<Unit> = withContext(ioDispatcher) {
         synchronized(this@MediaRecorderEngine) {
             val currentState = _state.value
             if (currentState !is RecordingState.Recording) {
@@ -159,7 +194,8 @@ class MediaRecorderEngine(
                 _state.value = RecordingState.Paused(
                     file = currentState.file,
                     elapsedMs = durationTracker.elapsedMs(),
-                    amplitude = 0
+                    amplitude = 0,
+                    isInterrupted = isInterrupted
                 )
                 Result.success(Unit)
             } catch (e: Exception) {
@@ -212,14 +248,28 @@ class MediaRecorderEngine(
 
             try {
                 val activeRecorder = recorder ?: error("MediaRecorder is not initialized")
-                activeRecorder.stop()
+                try {
+                    activeRecorder.stop()
+                } catch (stopEx: Exception) {
+                    releaseRecorderInternal()
+                    if (file.exists()) file.delete()
+                    currentFile = null
+                    _state.value = RecordingState.Error("Failed to finalize recording: ${stopEx.message}", stopEx)
+                    return@withContext Result.failure(stopEx)
+                }
                 releaseRecorderInternal()
 
                 validateRecordingFile(file)
                 val metadata = readMetadata(file)
+                val finalDurationMs = if (totalDurationMs > 0L) {
+                    totalDurationMs
+                } else {
+                    metadata.durationMs.takeIf { it > 0L } ?: 0L
+                }
+
                 val result = RecordingSessionResult(
                     file = file,
-                    durationMs = totalDurationMs,
+                    durationMs = finalDurationMs,
                     fileSizeBytes = file.length(),
                     sampleRate = metadata.sampleRate,
                     bitRate = metadata.bitRate,
@@ -228,11 +278,12 @@ class MediaRecorderEngine(
                     format = currentConfig.format.extension.uppercase()
                 )
 
+                currentFile = null
                 _state.value = RecordingState.Idle
                 Result.success(result)
             } catch (e: Exception) {
                 releaseRecorderInternal()
-                if (!file.isFile || file.length() <= 0L) file.delete()
+                if (file.exists() && (!file.isFile || file.length() < 32L)) file.delete()
                 currentFile = null
                 _state.value = RecordingState.Error("Error stopping recording: ${e.message}", e)
                 Result.failure(e)
@@ -271,12 +322,14 @@ class MediaRecorderEngine(
         val sampleRate: Int,
         val bitRate: Int,
         val channelCount: Int,
-        val mimeType: String
+        val mimeType: String,
+        val durationMs: Long
     )
 
     private fun validateRecordingFile(file: File) {
-        if (!file.isFile || file.length() <= 0L) {
-            throw IOException("Recording file is missing or empty")
+        if (!file.isFile || file.length() < 32L) {
+            if (file.exists()) file.delete()
+            throw IOException("Recording file is missing, empty, or smaller than minimal audio container header")
         }
     }
 
@@ -286,15 +339,24 @@ class MediaRecorderEngine(
             retriever.setDataSource(file.absolutePath)
             fun value(key: Int, fallback: Int): Int =
                 retriever.extractMetadata(key)?.toIntOrNull()?.takeIf { it > 0 } ?: fallback
+            val dur = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull()?.takeIf { it > 0L } ?: 0L
             ValidatedMetadata(
                 sampleRate = value(android.media.MediaMetadataRetriever.METADATA_KEY_SAMPLERATE, currentConfig.sampleRate),
                 bitRate = value(android.media.MediaMetadataRetriever.METADATA_KEY_BITRATE, currentConfig.bitRate),
-                channelCount = value(android.media.MediaMetadataRetriever.METADATA_KEY_CHANNEL_COUNT, currentConfig.channelCount),
+                channelCount = currentConfig.channelCount,
                 mimeType = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_MIMETYPE)
-                    ?.takeIf { it.isNotBlank() } ?: currentConfig.format.mimeType
+                    ?.takeIf { it.isNotBlank() } ?: currentConfig.format.mimeType,
+                durationMs = dur
             )
-        } catch (e: Exception) {
-            throw IOException("Unable to validate recording metadata", e)
+        } catch (_: Exception) {
+            ValidatedMetadata(
+                sampleRate = currentConfig.sampleRate,
+                bitRate = currentConfig.bitRate,
+                channelCount = currentConfig.channelCount,
+                mimeType = currentConfig.format.mimeType,
+                durationMs = 0L
+            )
         } finally {
             try { retriever.release() } catch (_: Exception) { }
         }
@@ -302,7 +364,11 @@ class MediaRecorderEngine(
 
     private fun releaseRecorderInternal() {
         val activeRecorder = recorder ?: return
-        try { activeRecorder.reset() } catch (_: Exception) { }
+        try {
+            activeRecorder.setOnErrorListener(null)
+            activeRecorder.setOnInfoListener(null)
+            activeRecorder.reset()
+        } catch (_: Exception) { }
         try { activeRecorder.release() } catch (_: Exception) { }
         recorder = null
     }

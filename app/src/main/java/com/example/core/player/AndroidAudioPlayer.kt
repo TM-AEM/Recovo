@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.SystemClock
 import com.example.core.database.model.RecordingEntity
 import com.example.core.service.PlaybackService
+import com.example.core.service.RecordingService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -56,36 +57,39 @@ class AndroidAudioPlayer(
     override val playbackState: StateFlow<PlaybackState> = _playbackState.asStateFlow()
 
     private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
-        when (focusChange) {
-            AudioManager.AUDIOFOCUS_LOSS -> {
-                resumeOnFocusGain = false
-                pause()
-            }
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                val wasPlaying = _playbackState.value.isPlaying
-                resumeOnFocusGain = wasPlaying
-                pause()
-            }
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                if (_playbackState.value.isPlaying) {
-                    try {
-                        mediaPlayer?.setVolume(0.2f, 0.2f)
-                        isDucked = true
-                    } catch (ignored: Exception) {
-                    }
-                }
-            }
-            AudioManager.AUDIOFOCUS_GAIN -> {
-                if (isDucked) {
-                    try {
-                        mediaPlayer?.setVolume(1.0f, 1.0f)
-                    } catch (ignored: Exception) {
-                    }
-                    isDucked = false
-                }
-                if (resumeOnFocusGain) {
+        synchronized(this) {
+            when (focusChange) {
+                AudioManager.AUDIOFOCUS_LOSS -> {
                     resumeOnFocusGain = false
-                    resume()
+                    pause()
+                    abandonAudioFocus()
+                }
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                    val wasPlaying = _playbackState.value.isPlaying
+                    resumeOnFocusGain = wasPlaying
+                    pause()
+                }
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                    if (_playbackState.value.isPlaying) {
+                        try {
+                            mediaPlayer?.setVolume(0.2f, 0.2f)
+                            isDucked = true
+                        } catch (ignored: Exception) {
+                        }
+                    }
+                }
+                AudioManager.AUDIOFOCUS_GAIN -> {
+                    if (isDucked) {
+                        try {
+                            mediaPlayer?.setVolume(1.0f, 1.0f)
+                        } catch (ignored: Exception) {
+                        }
+                        isDucked = false
+                    }
+                    if (resumeOnFocusGain) {
+                        resumeOnFocusGain = false
+                        resume()
+                    }
                 }
             }
         }
@@ -124,6 +128,14 @@ class AndroidAudioPlayer(
                         seekTo(pos)
                     }
 
+                    override fun onFastForward() {
+                        seekRelative(10000L)
+                    }
+
+                    override fun onRewind() {
+                        seekRelative(-10000L)
+                    }
+
                     override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
                         return super.onMediaButtonEvent(mediaButtonIntent)
                     }
@@ -154,6 +166,18 @@ class AndroidAudioPlayer(
 
     @Synchronized
     override fun play(recording: RecordingEntity) {
+        if (RecordingService.isRecordingActive()) {
+            _playbackState.value = _playbackState.value.copy(
+                errorMessage = "Cannot start playback while recording is in progress"
+            )
+            updateMediaSessionState(
+                state = FrameworkPlaybackState.STATE_PAUSED,
+                position = 0L,
+                errorMessage = "Cannot start playback while recording is in progress"
+            )
+            return
+        }
+
         val file = File(recording.filePath)
         if (!file.exists()) {
             updateMediaSessionState(
@@ -182,9 +206,30 @@ class AndroidAudioPlayer(
             return
         }
 
+        if (activePlaylist.none { it.id == recording.id }) {
+            originalPlaylist = listOf(recording)
+            activePlaylist = listOf(recording)
+        }
+
         stopInternal()
-        requestAudioFocus()
+        if (!requestAudioFocus()) {
+            _playbackState.value = _playbackState.value.copy(
+                currentRecording = recording,
+                isPlaying = false,
+                isPrepared = false,
+                errorMessage = "Audio focus denied by system"
+            )
+            updateMediaSessionState(FrameworkPlaybackState.STATE_ERROR, 0L, "Audio focus denied")
+            return
+        }
         startPlaybackService()
+
+        _playbackState.value = _playbackState.value.copy(
+            currentRecording = recording,
+            isPlaying = false,
+            isPrepared = false,
+            errorMessage = null
+        )
 
         try {
             val player = MediaPlayer().apply {
@@ -196,49 +241,64 @@ class AndroidAudioPlayer(
                 )
                 setDataSource(file.absolutePath)
                 setOnPreparedListener { mp ->
-                    val actualDuration = if (mp.duration > 0) mp.duration.toLong() else recording.durationMs
-                    _playbackState.value = _playbackState.value.copy(
-                        currentRecording = recording,
-                        isPlaying = true,
-                        currentPositionMs = 0L,
-                        durationMs = actualDuration,
-                        isPrepared = true,
-                        errorMessage = null
-                    )
+                    synchronized(this@AndroidAudioPlayer) {
+                        if (mediaPlayer !== mp) {
+                            return@setOnPreparedListener
+                        }
+                        val actualDuration = if (mp.duration > 0) mp.duration.toLong() else recording.durationMs
+                        _playbackState.value = _playbackState.value.copy(
+                            currentRecording = recording,
+                            isPlaying = true,
+                            currentPositionMs = 0L,
+                            durationMs = actualDuration,
+                            isPrepared = true,
+                            errorMessage = null
+                        )
 
-                    // Apply current playback speed
-                    applySpeedToPlayer(mp, _playbackState.value.playbackSpeed)
+                        // Apply current playback speed
+                        applySpeedToPlayer(mp, _playbackState.value.playbackSpeed)
 
-                    updateMediaSessionMetadata(recording, actualDuration)
-                    updateMediaSessionState(FrameworkPlaybackState.STATE_PLAYING, 0L)
+                        updateMediaSessionMetadata(recording, actualDuration)
+                        updateMediaSessionState(FrameworkPlaybackState.STATE_PLAYING, 0L)
 
-                    try {
-                        mp.start()
-                        startTicker()
-                    } catch (e: Exception) {
+                        try {
+                            mp.start()
+                            startTicker()
+                        } catch (e: Exception) {
+                            stopInternal()
+                            _playbackState.value = _playbackState.value.copy(
+                                isPlaying = false,
+                                isPrepared = false,
+                                errorMessage = "Unable to start playback: ${e.message}"
+                            )
+                            updateMediaSessionState(FrameworkPlaybackState.STATE_ERROR, 0L, e.message)
+                        }
+                    }
+                }
+                setOnCompletionListener { mp ->
+                    synchronized(this@AndroidAudioPlayer) {
+                        if (mediaPlayer !== mp) {
+                            return@setOnCompletionListener
+                        }
+                        handlePlaybackCompletion()
+                    }
+                }
+                setOnErrorListener { mp, what, extra ->
+                    synchronized(this@AndroidAudioPlayer) {
+                        if (mediaPlayer !== mp) {
+                            return@setOnErrorListener true
+                        }
+                        stopTicker()
+                        abandonAudioFocus()
                         stopInternal()
                         _playbackState.value = _playbackState.value.copy(
                             isPlaying = false,
                             isPrepared = false,
-                            errorMessage = "Unable to start playback: ${e.message}"
+                            errorMessage = "Playback error occurred (code: $what, extra: $extra)"
                         )
-                        updateMediaSessionState(FrameworkPlaybackState.STATE_ERROR, 0L, e.message)
+                        updateMediaSessionState(FrameworkPlaybackState.STATE_ERROR, 0L, "Playback error")
+                        true
                     }
-                }
-                setOnCompletionListener {
-                    handlePlaybackCompletion()
-                }
-                setOnErrorListener { _, what, extra ->
-                    stopTicker()
-                    abandonAudioFocus()
-                    stopInternal()
-                    _playbackState.value = _playbackState.value.copy(
-                        isPlaying = false,
-                        isPrepared = false,
-                        errorMessage = "Playback error occurred (code: $what, extra: $extra)"
-                    )
-                    updateMediaSessionState(FrameworkPlaybackState.STATE_ERROR, 0L, "Playback error")
-                    true
                 }
                 prepareAsync()
             }
@@ -307,6 +367,7 @@ class AndroidAudioPlayer(
     @Synchronized
     override fun pause() {
         val current = _playbackState.value
+        resumeOnFocusGain = false
         try {
             if (mediaPlayer?.isPlaying == true) {
                 mediaPlayer?.pause()
@@ -331,12 +392,31 @@ class AndroidAudioPlayer(
         val current = _playbackState.value
         if (current.currentRecording == null) return
 
+        if (RecordingService.isRecordingActive()) {
+            _playbackState.value = current.copy(
+                errorMessage = "Cannot start playback while recording is in progress"
+            )
+            updateMediaSessionState(
+                state = FrameworkPlaybackState.STATE_PAUSED,
+                position = current.currentPositionMs,
+                errorMessage = "Cannot start playback while recording is in progress"
+            )
+            return
+        }
+
         if (!current.isPrepared || mediaPlayer == null) {
             play(current.currentRecording)
             return
         }
 
-        requestAudioFocus()
+        if (!requestAudioFocus()) {
+            _playbackState.value = current.copy(
+                isPlaying = false,
+                errorMessage = "Audio focus denied by system"
+            )
+            updateMediaSessionState(FrameworkPlaybackState.STATE_ERROR, current.currentPositionMs, "Audio focus denied")
+            return
+        }
         startPlaybackService()
 
         try {
@@ -363,10 +443,12 @@ class AndroidAudioPlayer(
         val current = _playbackState.value
         val clamped = positionMs.coerceIn(0L, current.durationMs.coerceAtLeast(0L))
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                mediaPlayer?.seekTo(clamped, MediaPlayer.SEEK_CLOSEST)
-            } else {
-                mediaPlayer?.seekTo(clamped.toInt())
+            if (current.isPrepared && mediaPlayer != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    mediaPlayer?.seekTo(clamped, MediaPlayer.SEEK_CLOSEST)
+                } else {
+                    mediaPlayer?.seekTo(clamped.toInt())
+                }
             }
             _playbackState.value = current.copy(currentPositionMs = clamped)
             val sessionState = if (current.isPlaying) FrameworkPlaybackState.STATE_PLAYING else FrameworkPlaybackState.STATE_PAUSED
@@ -546,14 +628,14 @@ class AndroidAudioPlayer(
         stopTicker()
         abandonAudioFocus()
         try {
-            if (mediaPlayer?.isPlaying == true) {
-                mediaPlayer?.stop()
-            }
-            mediaPlayer?.reset()
-            mediaPlayer?.release()
-        } catch (ignored: Exception) {
-        } finally {
+            val player = mediaPlayer
             mediaPlayer = null
+            if (player?.isPlaying == true) {
+                player.stop()
+            }
+            player?.reset()
+            player?.release()
+        } catch (ignored: Exception) {
         }
     }
 
@@ -615,6 +697,8 @@ class AndroidAudioPlayer(
                 FrameworkPlaybackState.ACTION_PLAY_PAUSE or
                 FrameworkPlaybackState.ACTION_STOP or
                 FrameworkPlaybackState.ACTION_SEEK_TO or
+                FrameworkPlaybackState.ACTION_FAST_FORWARD or
+                FrameworkPlaybackState.ACTION_REWIND or
                 FrameworkPlaybackState.ACTION_SKIP_TO_NEXT or
                 FrameworkPlaybackState.ACTION_SKIP_TO_PREVIOUS
 
@@ -649,9 +733,9 @@ class AndroidAudioPlayer(
         }
     }
 
-    private fun requestAudioFocus() {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+    private fun requestAudioFocus(): Boolean {
+        return try {
+            val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val focusReq = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                     .setAudioAttributes(
                         AudioAttributes.Builder()
@@ -662,16 +746,18 @@ class AndroidAudioPlayer(
                     .setOnAudioFocusChangeListener(audioFocusChangeListener)
                     .build()
                 audioFocusRequest = focusReq
-                audioManager?.requestAudioFocus(focusReq)
+                audioManager?.requestAudioFocus(focusReq) ?: AudioManager.AUDIOFOCUS_REQUEST_GRANTED
             } else {
                 @Suppress("DEPRECATION")
                 audioManager?.requestAudioFocus(
                     audioFocusChangeListener,
                     AudioManager.STREAM_MUSIC,
                     AudioManager.AUDIOFOCUS_GAIN
-                )
+                ) ?: AudioManager.AUDIOFOCUS_REQUEST_GRANTED
             }
+            result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
         } catch (ignored: Exception) {
+            true
         }
     }
 

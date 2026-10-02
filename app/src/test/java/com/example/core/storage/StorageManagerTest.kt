@@ -116,4 +116,54 @@ class StorageManagerTest {
         val files = (listResult as StorageResult.Success).data
         assertEquals(2, files.size)
     }
+
+    @Test
+    fun sanitizeFileName_handlesNestedTraversalAndUnicode() {
+        val nested = "....//....//passwd"
+        val sanitizedNested = storageManager.sanitizeFileName(nested)
+        assertFalse(sanitizedNested.contains(".."))
+        assertFalse(sanitizedNested.contains("/"))
+
+        val arabicTitle = "تسجيل المقابلة الصوتية"
+        val sanitizedArabic = storageManager.sanitizeFileName(arabicTitle)
+        assertEquals(arabicTitle, sanitizedArabic)
+
+        val trimmedEdgeChars = "___...VoiceNote...___"
+        val sanitizedEdge = storageManager.sanitizeFileName(trimmedEdgeChars)
+        assertEquals("VoiceNote", sanitizedEdge)
+    }
+
+    @Test
+    fun deleteFile_rejectsDeletionOutsideRecordingsDirectory() = runTest {
+        val outsideFile = File(context.cacheDir, "outside_file.txt").apply { writeText("sensitive data") }
+        val result = storageManager.deleteFile(outsideFile.absolutePath)
+        assertTrue(result is StorageResult.Error)
+        assertEquals(StorageErrorType.SECURITY_ERROR, (result as StorageResult.Error).errorType)
+        assertTrue(outsideFile.exists())
+        outsideFile.delete()
+    }
+
+    @Test
+    fun getFileSizeBytes_rejectsAccessOutsideRecordingsDirectory() = runTest {
+        val outsideFile = File(context.cacheDir, "outside_file2.txt").apply { writeText("sensitive data") }
+        val result = storageManager.getFileSizeBytes(outsideFile.absolutePath)
+        assertTrue(result is StorageResult.Error)
+        assertEquals(StorageErrorType.SECURITY_ERROR, (result as StorageResult.Error).errorType)
+        outsideFile.delete()
+    }
+
+    @Test
+    fun cleanOrphanedZeroByteFiles_excludesActiveFileAndPreservesNonzeroFiles() = runTest {
+        val activeEmpty = File(testDir, "active_recording.m4a").apply { createNewFile() }
+        val orphanEmpty = File(testDir, "orphan_empty.m4a").apply { createNewFile() }
+        val validNonzero = File(testDir, "valid_audio.m4a").apply { writeBytes(ByteArray(512)) }
+
+        val cleanResult = storageManager.cleanOrphanedZeroByteFiles(excludeFile = activeEmpty)
+        assertTrue(cleanResult is StorageResult.Success)
+        assertEquals(1, (cleanResult as StorageResult.Success).data)
+
+        assertTrue("Active empty file must be preserved", activeEmpty.exists())
+        assertFalse("Orphaned empty file must be deleted", orphanEmpty.exists())
+        assertTrue("Nonzero valid audio file must be preserved", validNonzero.exists())
+    }
 }

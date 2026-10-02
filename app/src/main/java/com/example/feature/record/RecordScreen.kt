@@ -55,11 +55,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,32 +72,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.R
 import com.example.core.designsystem.theme.RecovoDimensions
 import com.example.core.designsystem.theme.RecovoSpacing
 import com.example.core.engine.RecordingState
-import com.example.core.service.RecordingController
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecordScreen(
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: RecordViewModel = viewModel(factory = RecordViewModel.Factory(LocalContext.current))
 ) {
     val context = LocalContext.current
-    val controller = remember { RecordingController(context.applicationContext) }
-    val viewModel = remember { RecordViewModel(controller) }
     val state by viewModel.recordingState.collectAsState()
     val selectedQuality by viewModel.selectedQuality.collectAsState()
 
-    DisposableEffect(Unit) {
-        onDispose {
-            controller.unbind()
-        }
-    }
-
-    var customTitle by remember { mutableStateOf("") }
+    var customTitle by rememberSaveable { mutableStateOf("") }
 
     // Permission handling
     var hasMicPermission by remember {
@@ -109,9 +102,9 @@ fun RecordScreen(
         )
     }
 
-    var showPermissionRationale by remember { mutableStateOf(false) }
-    var showBackConfirmDialog by remember { mutableStateOf(false) }
-    var showDiscardConfirmDialog by remember { mutableStateOf(false) }
+    var showPermissionRationale by rememberSaveable { mutableStateOf(false) }
+    var showBackConfirmDialog by rememberSaveable { mutableStateOf(false) }
+    var showDiscardConfirmDialog by rememberSaveable { mutableStateOf(false) }
 
     val micPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -420,6 +413,7 @@ fun RecordScreen(
                                         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                     }
                                     viewModel.startRecording(customTitle.trim().ifEmpty { null })
+                                    customTitle = ""
                                 } else {
                                     micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                                 }

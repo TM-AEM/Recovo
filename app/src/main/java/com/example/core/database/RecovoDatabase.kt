@@ -25,7 +25,7 @@ import com.example.core.database.model.TagEntity
         BookmarkEntity::class
     ],
     version = 2,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class RecovoDatabase : RoomDatabase() {
 
