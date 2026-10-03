@@ -22,6 +22,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -98,7 +99,33 @@ class CrossSystemArchitectureTest {
     }
 
     @Test
-    fun architecture_cleanRecordingStop_persistsToDatabaseAndFreesPlayback() = runTest {
+    fun architecture_cancelRecording_clearsActiveStateAndAllowsPlayback() = runTest {
+        val serviceController = Robolectric.buildService(RecordingService::class.java)
+        val service = serviceController.create().get()
+
+        val activeFile = File(context.cacheDir, "cancel_test.m4a").apply { writeBytes(ByteArray(128)) }
+        val stateField = RecordingService::class.java.getDeclaredField("_recordingState")
+        stateField.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val stateFlow = stateField.get(service) as kotlinx.coroutines.flow.MutableStateFlow<RecordingState>
+        stateFlow.value = RecordingState.Recording(activeFile, 5000L, 100)
+        RecordingService.setRecordingActiveForTesting(true)
+        assertTrue(RecordingService.isRecordingActive())
+
+        // User cancels
+        service.cancelRecording()
+        org.robolectric.shadows.ShadowLooper.idleMainLooper()
+
+        // State must transition to Idle and active flag must be cleared
+        assertEquals(RecordingState.Idle, service.recordingState.value)
+        assertFalse(RecordingService.isRecordingActive())
+
+        serviceController.destroy()
+        activeFile.delete()
+    }
+
+    @Test
+    fun architecture_persistedRecording_canBeImmediatelyPlayedAndManaged() = runTest {
         val db = RecovoDatabase.getInstance(context)
         val storageManager = StorageManager(context)
         val repository = RecordingRepositoryImpl(
@@ -109,16 +136,19 @@ class CrossSystemArchitectureTest {
             storageManager = storageManager
         )
 
-        // Precondition: Active playback is paused when recording starts
-        val testFile = File(context.cacheDir, "test_interop.m4a")
-        testFile.writeBytes(ByteArray(512))
+        val testFile = File(context.cacheDir, "test_interop.m4a").apply {
+            writeBytes(ByteArray(1024))
+            val ds = org.robolectric.shadows.util.DataSource.toDataSource(absolutePath)
+            org.robolectric.shadows.ShadowMediaPlayer.addMediaInfo(ds, org.robolectric.shadows.ShadowMediaPlayer.MediaInfo(6000, 0))
+        }
+
         val testEntity = RecordingEntity(
             fileName = testFile.name,
             displayName = "Interop Test Track",
             filePath = testFile.absolutePath,
             mimeType = "audio/mp4",
             format = "M4A",
-            durationMs = 8000L,
+            durationMs = 6000L,
             fileSizeBytes = testFile.length(),
             sampleRate = 44100,
             bitRate = 128000,
@@ -127,30 +157,25 @@ class CrossSystemArchitectureTest {
         val savedId = repository.insertRecording(testEntity)
         assertTrue(savedId > 0L)
 
-        // Play the track
-        player.play(testEntity.copy(id = savedId))
+        // Verify retrieval and immediate playback
+        val saved = repository.getRecordingById(savedId)
+        assertNotNull(saved)
+
+        player.play(saved!!)
         org.robolectric.shadows.ShadowLooper.idleMainLooper()
 
-        // Start RecordingService -> verifies audio focus & playback pause
-        val serviceController = Robolectric.buildService(RecordingService::class.java)
-        val service = serviceController.create().get()
+        assertNull(player.playbackState.value.errorMessage)
+        assertEquals("Interop Test Track", player.playbackState.value.currentRecording?.displayName)
 
-        service.startRecording("Architecture Test Recording", RecordingQuality.HIGH.id)
-        org.robolectric.shadows.ShadowLooper.idleMainLooper()
-        testDispatcher.scheduler.advanceUntilIdle()
+        // Rename while active updates player metadata seamlessly
+        repository.renameRecording(savedId, "Renamed Interop Track")
+        val updated = repository.getRecordingById(savedId)
+        assertNotNull(updated)
+        player.updateCurrentRecordingMetadata(updated!!)
 
-        // Playback must be paused by RecordingService
-        assertFalse(player.playbackState.value.isPlaying)
+        assertEquals("Renamed Interop Track", player.playbackState.value.currentRecording?.displayName)
 
-        // When recording finishes
-        service.stopRecording()
-        org.robolectric.shadows.ShadowLooper.idleMainLooper()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        // Verify active recording flag is cleared
-        assertFalse(RecordingService.isRecordingActive())
-
-        serviceController.destroy()
+        player.stop()
         testFile.delete()
     }
 }

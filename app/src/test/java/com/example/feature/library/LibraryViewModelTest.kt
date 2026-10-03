@@ -182,7 +182,8 @@ class LibraryViewModelTest {
             fileSizeBytes = 1000L,
             sampleRate = 44100,
             bitRate = 128000,
-            channelCount = 1
+            channelCount = 1,
+            createdAt = 2000L
         )
         val rec2 = RecordingEntity(
             id = 2,
@@ -195,7 +196,8 @@ class LibraryViewModelTest {
             fileSizeBytes = 2000L,
             sampleRate = 44100,
             bitRate = 128000,
-            channelCount = 1
+            channelCount = 1,
+            createdAt = 1000L
         )
 
         fakeRepository.setRecordings(listOf(rec1, rec2))
