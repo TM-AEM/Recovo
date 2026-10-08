@@ -9,6 +9,7 @@ import com.example.core.database.model.FolderEntity
 import com.example.core.database.model.RecordingEntity
 import com.example.core.database.model.RecordingTagCrossRef
 import com.example.core.database.model.TagEntity
+import com.example.core.storage.StorageErrorType
 import com.example.core.storage.StorageManager
 import com.example.core.storage.StorageResult
 import com.example.domain.model.SortOrder
@@ -70,14 +71,13 @@ class RecordingRepositoryImpl(
     }
 
     override suspend fun deleteRecording(recording: RecordingEntity): StorageResult<Boolean> = withContext(ioDispatcher) {
-        // Delete database row first
-        recordingDao.delete(recording)
-
-        // Then clean up file from storage if present
-        if (recording.filePath.isNotBlank()) {
+        // Remove the physical file first. If it cannot be removed (IO/security failure), keep the
+        // Room row so the Library never silently loses the file↔metadata relationship, and surface
+        // the failure so the UI cannot report a false success.
+        val fileResult: StorageResult<Boolean> = if (recording.filePath.isNotBlank()) {
             val result = storageManager.deleteFile(recording.filePath)
-            // If the file was already missing, the delete is still logically complete
-            if (result is StorageResult.Error && result.errorType == com.example.core.storage.StorageErrorType.FILE_NOT_FOUND) {
+            // A file that is already absent is treated as successfully deleted
+            if (result is StorageResult.Error && result.errorType == StorageErrorType.FILE_NOT_FOUND) {
                 StorageResult.Success(true)
             } else {
                 result
@@ -85,6 +85,13 @@ class RecordingRepositoryImpl(
         } else {
             StorageResult.Success(true)
         }
+
+        if (fileResult is StorageResult.Error) {
+            return@withContext fileResult
+        }
+
+        recordingDao.delete(recording)
+        StorageResult.Success(true)
     }
 
     override suspend fun deleteRecordings(recordings: List<RecordingEntity>): List<StorageResult<Boolean>> = withContext(ioDispatcher) {

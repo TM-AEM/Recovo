@@ -127,6 +127,61 @@ class RecordingRepositoryTest {
     }
 
     @Test
+    fun deleteRecording_whenFileAlreadyMissing_deletesRowAndReportsSuccess() = runTest(testDispatcher) {
+        val missingPath = File(testDir, "already_gone.m4a").absolutePath
+        val recording = RecordingEntity(
+            fileName = "already_gone.m4a",
+            displayName = "Missing File",
+            filePath = missingPath,
+            mimeType = "audio/mp4",
+            format = "M4A",
+            durationMs = 1000L,
+            fileSizeBytes = 1000L,
+            sampleRate = 44100,
+            bitRate = 128000,
+            channelCount = 1
+        )
+        val id = repository.insertRecording(recording)
+        val inserted = repository.getRecordingById(id)!!
+
+        val result = repository.deleteRecording(inserted)
+
+        assertTrue(result is StorageResult.Success)
+        assertNull(repository.getRecordingById(id))
+    }
+
+    @Test
+    fun deleteRecording_whenPhysicalFileCannotBeDeleted_keepsRoomRowAndReportsFailure() = runTest(testDispatcher) {
+        // A non-empty directory cannot be removed by File.delete(); it stands in for an
+        // undeletable physical file so we can observe the failure path deterministically.
+        val blocker = File(testDir, "undeletable.m4a")
+        assertTrue(blocker.mkdirs())
+        File(blocker, "child.bin").writeText("x")
+
+        val recording = RecordingEntity(
+            fileName = "undeletable.m4a",
+            displayName = "Undeletable",
+            filePath = blocker.absolutePath,
+            mimeType = "audio/mp4",
+            format = "M4A",
+            durationMs = 1000L,
+            fileSizeBytes = 1000L,
+            sampleRate = 44100,
+            bitRate = 128000,
+            channelCount = 1
+        )
+        val id = repository.insertRecording(recording)
+        val inserted = repository.getRecordingById(id)!!
+
+        val result = repository.deleteRecording(inserted)
+
+        // Failure must be surfaced, and the metadata must NOT be silently dropped while the
+        // physical file still exists (Library must never lose the file↔Room relationship).
+        assertTrue(result is StorageResult.Error)
+        assertNotNull(repository.getRecordingById(id))
+    }
+
+    @Test
     fun foldersAndBookmarksOperations() = runTest(testDispatcher) {
         val folderId = repository.createFolder("Work")
         assertTrue(folderId > 0)
