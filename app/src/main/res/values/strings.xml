@@ -73,4 +73,27 @@
     <string name="interruption_paused_desc">Recording paused automatically due to another audio app or incoming call. Tap Resume to continue.</string>
     <string name="recording_title_optional">Recording Title (Optional)</string>
     <string name="recording_title_hint">e.g. Meeting Note</string>
+
+    <!-- Phase 25 Recording States & Controls -->
+    <string name="state_idle">Ready to Record</string>
+    <string name="state_preparing">Preparing Microphone…</string>
+    <string name="state_recording">Recording</string>
+    <string name="state_paused">Paused</string>
+    <string name="state_interrupted">Paused (Interrupted)</string>
+    <string name="state_stopping">Saving Recording…</string>
+    <string name="state_saved">Saved Successfully</string>
+    <string name="state_error">Recording Error</string>
+    <string name="start_recording">Start Recording</string>
+    <string name="pause_recording">Pause</string>
+    <string name="resume_recording">Resume</string>
+    <string name="stop_and_save">Save</string>
+    <string name="cancel_recording">Cancel</string>
+    <string name="recording_saved_title">Recording Saved</string>
+    <string name="record_another">Record Another</string>
+    <string name="audio_level_meter">Input Level</string>
+    <string name="back_dialog_title">Recording in Progress</string>
+    <string name="back_dialog_message">A recording is actively running. Would you like to save and exit, or continue recording in the background?</string>
+    <string name="back_dialog_save">Save &amp; Exit</string>
+    <string name="back_dialog_continue">Continue in Background</string>
+    <string name="back_dialog_dismiss">Stay on Screen</string>
 </resources>

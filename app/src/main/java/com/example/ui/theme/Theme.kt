@@ -55,13 +55,3 @@ fun RecovoTheme(
 
   MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
 }
-
-// Keep alias for backward compatibility with existing tests
-@Composable
-fun MyApplicationTheme(
-  darkTheme: Boolean = isSystemInDarkTheme(),
-  dynamicColor: Boolean = true,
-  content: @Composable () -> Unit,
-) {
-  RecovoTheme(darkTheme = darkTheme, dynamicColor = dynamicColor, content = content)
-}

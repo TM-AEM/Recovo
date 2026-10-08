@@ -18,6 +18,7 @@ import com.example.feature.library.LibraryTab
 import com.example.feature.library.LibraryViewModel
 import com.example.feature.record.RecordViewModel
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -159,6 +160,90 @@ class AppLifecycleHardeningTest {
 
         // Cleanup
         controller.unbind()
+        serviceController.destroy()
+    }
+
+    @Test
+    fun recordingController_onServiceDisconnected_transitionsActiveRecordingToError() {
+        val controller = RecordingController(context)
+
+        // Simulate active recording state
+        val dummyFile = java.io.File(context.cacheDir, "disconnect_test.m4a")
+        val stateField = RecordingController::class.java.getDeclaredField("_recordingState")
+        stateField.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val flow = stateField.get(controller) as kotlinx.coroutines.flow.MutableStateFlow<RecordingState>
+        flow.value = RecordingState.Recording(dummyFile, 5000L, 200)
+
+        // Retrieve the internal connection
+        val connField = RecordingController::class.java.getDeclaredField("connection")
+        connField.isAccessible = true
+        val connection = connField.get(controller) as android.content.ServiceConnection
+
+        // Simulate unexpected service disconnection (process crash / kill)
+        connection.onServiceDisconnected(android.content.ComponentName(context, RecordingService::class.java))
+
+        assertTrue(
+            "Unexpected disconnection during active recording must transition controller to Error state",
+            controller.recordingState.value is RecordingState.Error
+        )
+
+        controller.release()
+    }
+
+    @Test
+    fun recordingService_onDestroy_whileRecording_cancelsAndCleansUpFile() {
+        val serviceController = Robolectric.buildService(RecordingService::class.java)
+        val service = serviceController.create().get()
+
+        val activeFile = java.io.File(context.cacheDir, "service_destroy_test.m4a").apply {
+            writeBytes(ByteArray(1024))
+        }
+        assertTrue(activeFile.exists())
+
+        // Set service to active recording with currentFile
+        val stateField = RecordingService::class.java.getDeclaredField("_recordingState")
+        stateField.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val stateFlow = stateField.get(service) as kotlinx.coroutines.flow.MutableStateFlow<RecordingState>
+        stateFlow.value = RecordingState.Recording(activeFile, 15000L, 300)
+
+        val engineField = RecordingService::class.java.getDeclaredField("recordingEngine")
+        engineField.isAccessible = true
+        val engine = engineField.get(service) as com.example.core.engine.MediaRecorderEngine
+        val fileField = com.example.core.engine.MediaRecorderEngine::class.java.getDeclaredField("currentFile")
+        fileField.isAccessible = true
+        fileField.set(engine, activeFile)
+
+        // Destroy service while recording
+        serviceController.destroy()
+
+        // Verify partial file was cleaned up and active instance was nulled
+        org.junit.Assert.assertNull(RecordingService.getActiveService())
+        assertFalse(
+            "Incomplete partial file must be deleted upon unexpected service destruction",
+            activeFile.exists()
+        )
+    }
+
+    @Test
+    fun recordingService_notificationActions_areIdempotentAndSafe() {
+        val serviceController = Robolectric.buildService(RecordingService::class.java)
+        val service = serviceController.create().get()
+
+        // Calling pause/resume/stop intents while Idle must be completely safe and no-op
+        service.onStartCommand(RecordingService.pauseIntent(context), 0, 1)
+        assertTrue(service.recordingState.value is RecordingState.Idle)
+
+        service.onStartCommand(RecordingService.resumeIntent(context), 0, 2)
+        assertTrue(service.recordingState.value is RecordingState.Idle)
+
+        service.onStartCommand(RecordingService.stopIntent(context), 0, 3)
+        assertTrue(service.recordingState.value is RecordingState.Idle)
+
+        service.onStartCommand(RecordingService.cancelIntent(context), 0, 4)
+        assertTrue(service.recordingState.value is RecordingState.Idle)
+
         serviceController.destroy()
     }
 }

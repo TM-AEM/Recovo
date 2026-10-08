@@ -54,6 +54,21 @@ class RecordingController(val context: Context) {
             stateCollectionJob = null
             service = null
             isBound = false
+            val current = _recordingState.value
+            if (current is RecordingState.Recording || current is RecordingState.Paused || current is RecordingState.Preparing) {
+                _recordingState.value = RecordingState.Error("Recording service disconnected unexpectedly")
+            }
+        }
+
+        override fun onBindingDied(name: ComponentName?) {
+            stateCollectionJob?.cancel()
+            stateCollectionJob = null
+            service = null
+            isBound = false
+            val current = _recordingState.value
+            if (current is RecordingState.Recording || current is RecordingState.Paused || current is RecordingState.Preparing) {
+                _recordingState.value = RecordingState.Error("Recording service connection died")
+            }
         }
     }
 
@@ -67,6 +82,11 @@ class RecordingController(val context: Context) {
     }
 
     fun startRecording(displayName: String? = null, qualityId: String? = null) {
+        val current = _recordingState.value
+        if (current !is RecordingState.Idle && current !is RecordingState.Saved && current !is RecordingState.Error) {
+            return
+        }
+        _recordingState.value = RecordingState.Preparing
         val intent = RecordingService.startRecordingIntent(context, displayName, qualityId)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(intent)
@@ -79,6 +99,10 @@ class RecordingController(val context: Context) {
     }
 
     fun pauseRecording(isInterrupted: Boolean = false) {
+        val current = _recordingState.value
+        if (current !is RecordingState.Recording) {
+            return
+        }
         service?.pauseRecording(isInterrupted) ?: run {
             val intent = RecordingService.pauseIntent(context, isInterrupted)
             context.startService(intent)
@@ -86,6 +110,10 @@ class RecordingController(val context: Context) {
     }
 
     fun resumeRecording() {
+        val current = _recordingState.value
+        if (current !is RecordingState.Paused) {
+            return
+        }
         service?.resumeRecording() ?: run {
             val intent = RecordingService.resumeIntent(context)
             context.startService(intent)
@@ -93,6 +121,11 @@ class RecordingController(val context: Context) {
     }
 
     fun stopRecording() {
+        val current = _recordingState.value
+        if (current !is RecordingState.Recording && current !is RecordingState.Paused) {
+            return
+        }
+        _recordingState.value = RecordingState.Stopping
         service?.stopRecording() ?: run {
             val intent = RecordingService.stopIntent(context)
             context.startService(intent)
@@ -100,6 +133,11 @@ class RecordingController(val context: Context) {
     }
 
     fun cancelRecording() {
+        val current = _recordingState.value
+        if (current !is RecordingState.Recording && current !is RecordingState.Paused && current !is RecordingState.Preparing) {
+            return
+        }
+        _recordingState.value = RecordingState.Idle
         service?.cancelRecording() ?: run {
             val intent = RecordingService.cancelIntent(context)
             context.startService(intent)

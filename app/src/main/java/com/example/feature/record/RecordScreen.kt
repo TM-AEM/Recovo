@@ -15,6 +15,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,21 +29,28 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.PhoneCallback
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -51,6 +59,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -67,6 +76,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -92,7 +103,7 @@ fun RecordScreen(
 
     var customTitle by rememberSaveable { mutableStateOf("") }
 
-    // Permission handling
+    // Microphone permission check
     var hasMicPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -114,12 +125,6 @@ fun RecordScreen(
             showPermissionRationale = (context as? Activity)?.shouldShowRequestPermissionRationale(
                 Manifest.permission.RECORD_AUDIO
             ) != true
-        } else {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                    // Handled gracefully without blocking
-                }
-            }
         }
     }
 
@@ -128,6 +133,9 @@ fun RecordScreen(
     ) { _ -> }
 
     val isActivelyRecording = state is RecordingState.Recording || state is RecordingState.Paused
+    val isPreparingOrStopping = state is RecordingState.Preparing || state is RecordingState.Stopping
+
+    // Intercept back gesture during active recording to prevent accidental loss
     BackHandler(enabled = isActivelyRecording) {
         showBackConfirmDialog = true
     }
@@ -135,7 +143,7 @@ fun RecordScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Recorder Studio") },
+                title = { Text(stringResource(R.string.app_name)) },
                 navigationIcon = {
                     IconButton(
                         onClick = {
@@ -149,7 +157,7 @@ fun RecordScreen(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.cancel)
                         )
                     }
                 }
@@ -166,7 +174,7 @@ fun RecordScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Top Section: Permissions & Quality Preset
+            // Top Section: Permissions, Interruption Banner & Quality Preset
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -194,7 +202,7 @@ fun RecordScreen(
                             )
                             Spacer(modifier = Modifier.height(RecovoSpacing.small))
                             Text(
-                                text = "Recovo requires microphone access to record audio locally on your device.",
+                                text = "Recovo requires microphone access to record high-fidelity audio locally on your device.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
@@ -226,9 +234,10 @@ fun RecordScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Info,
+                                imageVector = Icons.AutoMirrored.Filled.PhoneCallback,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onTertiaryContainer
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.size(28.dp)
                             )
                             Spacer(modifier = Modifier.width(RecovoSpacing.small))
                             Column {
@@ -238,6 +247,7 @@ fun RecordScreen(
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer
                                 )
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = stringResource(R.string.interruption_paused_desc),
                                     style = MaterialTheme.typography.bodySmall,
@@ -251,17 +261,17 @@ fun RecordScreen(
                 // Quality Card / Locked Badge
                 RecordingQualityCard(
                     selectedQuality = selectedQuality,
-                    isRecordingActive = isActivelyRecording,
+                    isRecordingActive = isActivelyRecording || isPreparingOrStopping,
                     onSelectQuality = { viewModel.setQuality(it) },
                     modifier = Modifier.padding(bottom = RecovoSpacing.small)
                 )
 
-                // Optional Pre-recording Custom Title
-                if (!isActivelyRecording) {
+                // Optional Pre-recording Custom Title (Editable only when Idle)
+                if (!isActivelyRecording && !isPreparingOrStopping) {
                     Spacer(modifier = Modifier.height(RecovoSpacing.extraSmall))
                     OutlinedTextField(
                         value = customTitle,
-                        onValueChange = { customTitle = it },
+                        onValueChange = { customTitle = it.take(80) },
                         label = { Text(stringResource(R.string.recording_title_optional)) },
                         placeholder = { Text(stringResource(R.string.recording_title_hint)) },
                         singleLine = true,
@@ -279,7 +289,7 @@ fun RecordScreen(
                 }
             }
 
-            // Center Section: Pulse Visualizer, Dynamic Waveform & High-Precision Timer
+            // Center Section: Studio Visualizer, Timer & State Presentation
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -298,35 +308,12 @@ fun RecordScreen(
                     else -> 0
                 }
 
-                // Studio Pulse Visualizer
-                Box(
-                    modifier = Modifier
-                        .size(96.dp)
-                        .clip(CircleShape)
-                        .background(
-                            when (state) {
-                                is RecordingState.Recording -> MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
-                                is RecordingState.Paused -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
-                                else -> MaterialTheme.colorScheme.surfaceVariant
-                            }
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Mic,
-                        contentDescription = null,
-                        tint = when (state) {
-                            is RecordingState.Recording -> MaterialTheme.colorScheme.error
-                            is RecordingState.Paused -> MaterialTheme.colorScheme.tertiary
-                            else -> MaterialTheme.colorScheme.primary
-                        },
-                        modifier = Modifier.size(44.dp)
-                    )
-                }
+                // Studio Status Icon / Hub
+                StudioStatusHub(state = state)
 
                 Spacer(modifier = Modifier.height(RecovoSpacing.medium))
 
-                // High-Precision Formatted Timer
+                // High-Precision Formatted Monospace Timer
                 Text(
                     text = formatTimer(elapsedMs),
                     fontSize = 42.sp,
@@ -338,33 +325,12 @@ fun RecordScreen(
 
                 Spacer(modifier = Modifier.height(RecovoSpacing.extraSmall))
 
-                // State Indicator Label
-                val stateLabel = when (state) {
-                    is RecordingState.Idle -> "READY TO RECORD"
-                    is RecordingState.Preparing -> "PREPARING..."
-                    is RecordingState.Recording -> "RECORDING"
-                    is RecordingState.Paused -> if ((state as RecordingState.Paused).isInterrupted) "PAUSED (INTERRUPTED)" else "PAUSED"
-                    is RecordingState.Stopping -> "SAVING..."
-                    is RecordingState.Saved -> "SAVED SUCCESSFULLY"
-                    is RecordingState.Error -> "ERROR OCCURRED"
-                }
-
-                Text(
-                    text = stateLabel,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = when (state) {
-                        is RecordingState.Recording -> MaterialTheme.colorScheme.error
-                        is RecordingState.Paused -> MaterialTheme.colorScheme.tertiary
-                        is RecordingState.Saved -> MaterialTheme.colorScheme.primary
-                        is RecordingState.Error -> MaterialTheme.colorScheme.error
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    fontWeight = FontWeight.SemiBold
-                )
+                // Professional Recording State Badge
+                RecordingStateBadge(state = state)
 
                 Spacer(modifier = Modifier.height(RecovoSpacing.small))
 
-                // Dynamic Audio Waveform Equalizer
+                // Lightweight Level Meter (Zero per-frame allocations)
                 DynamicWaveformVisualizer(
                     amplitude = currentAmp,
                     isRecording = state is RecordingState.Recording,
@@ -385,18 +351,92 @@ fun RecordScreen(
                     )
                 }
 
-                // Error Message if any
-                if (state is RecordingState.Error) {
+                // Saved State Success Card
+                if (state is RecordingState.Saved) {
+                    val savedState = state as RecordingState.Saved
                     Spacer(modifier = Modifier.height(RecovoSpacing.medium))
-                    Text(
-                        text = (state as RecordingState.Error).message,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(RecovoSpacing.medium),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Spacer(modifier = Modifier.width(RecovoSpacing.small))
+                                Text(
+                                    text = stringResource(R.string.recording_saved_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = savedState.file.name,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
+
+                // Error State Feedback
+                if (state is RecordingState.Error) {
+                    val errorState = state as RecordingState.Error
+                    Spacer(modifier = Modifier.height(RecovoSpacing.medium))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(RecovoSpacing.medium),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.ErrorOutline,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                Spacer(modifier = Modifier.width(RecovoSpacing.small))
+                                Text(
+                                    text = stringResource(R.string.state_error),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = errorState.message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Spacer(modifier = Modifier.height(RecovoSpacing.small))
+                            OutlinedButton(
+                                onClick = { viewModel.resetState() }
+                            ) {
+                                Icon(imageVector = Icons.Default.Refresh, contentDescription = null)
+                                Spacer(modifier = Modifier.width(RecovoSpacing.extraSmall))
+                                Text("Dismiss")
+                            }
+                        }
+                    }
                 }
             }
 
-            // Bottom Section: Recording Controls
+            // Bottom Section: Professional Recording Controls
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -412,12 +452,14 @@ fun RecordScreen(
                                         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                                         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                     }
-                                    viewModel.startRecording(customTitle.trim().ifEmpty { null })
+                                    val titleToUse = customTitle.trim().ifEmpty { null }
+                                    viewModel.startRecording(titleToUse)
                                     customTitle = ""
                                 } else {
                                     micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                                 }
                             },
+                            enabled = !isPreparingOrStopping,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(RecovoDimensions.minTouchTarget)
@@ -432,7 +474,10 @@ fun RecordScreen(
                                 contentDescription = null,
                                 modifier = Modifier.padding(end = RecovoSpacing.small)
                             )
-                            Text(text = "Start Recording")
+                            Text(
+                                text = if (state is RecordingState.Saved) stringResource(R.string.record_another) else stringResource(R.string.start_recording),
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
 
@@ -449,9 +494,9 @@ fun RecordScreen(
                                     .height(RecovoDimensions.minTouchTarget)
                                     .testTag("record_cancel_button")
                             ) {
-                                Icon(imageVector = Icons.Default.Close, contentDescription = "Cancel")
+                                Icon(imageVector = Icons.Default.Close, contentDescription = stringResource(R.string.cancel))
                                 Spacer(modifier = Modifier.width(RecovoSpacing.extraSmall))
-                                Text("Cancel")
+                                Text(stringResource(R.string.cancel_recording))
                             }
 
                             // Pause button
@@ -461,9 +506,9 @@ fun RecordScreen(
                                     .height(RecovoDimensions.minTouchTarget)
                                     .testTag("record_pause_button")
                             ) {
-                                Icon(imageVector = Icons.Default.Pause, contentDescription = "Pause")
+                                Icon(imageVector = Icons.Default.Pause, contentDescription = stringResource(R.string.pause_recording))
                                 Spacer(modifier = Modifier.width(RecovoSpacing.extraSmall))
-                                Text("Pause")
+                                Text(stringResource(R.string.pause_recording))
                             }
 
                             // Stop & Save button
@@ -474,9 +519,9 @@ fun RecordScreen(
                                     .testTag("record_stop_button"),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
-                                Icon(imageVector = Icons.Default.Stop, contentDescription = "Stop")
+                                Icon(imageVector = Icons.Default.Stop, contentDescription = stringResource(R.string.save))
                                 Spacer(modifier = Modifier.width(RecovoSpacing.extraSmall))
-                                Text("Save")
+                                Text(stringResource(R.string.stop_and_save))
                             }
                         }
                     }
@@ -494,9 +539,9 @@ fun RecordScreen(
                                     .height(RecovoDimensions.minTouchTarget)
                                     .testTag("record_cancel_button")
                             ) {
-                                Icon(imageVector = Icons.Default.Close, contentDescription = "Cancel")
+                                Icon(imageVector = Icons.Default.Close, contentDescription = stringResource(R.string.cancel))
                                 Spacer(modifier = Modifier.width(RecovoSpacing.extraSmall))
-                                Text("Cancel")
+                                Text(stringResource(R.string.cancel_recording))
                             }
 
                             // Resume button
@@ -507,9 +552,9 @@ fun RecordScreen(
                                     .testTag("record_resume_button"),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                             ) {
-                                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Resume")
+                                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = stringResource(R.string.resume_recording))
                                 Spacer(modifier = Modifier.width(RecovoSpacing.extraSmall))
-                                Text("Resume")
+                                Text(stringResource(R.string.resume_recording))
                             }
 
                             // Stop & Save button
@@ -519,19 +564,49 @@ fun RecordScreen(
                                     .height(RecovoDimensions.minTouchTarget)
                                     .testTag("record_stop_button")
                             ) {
-                                Icon(imageVector = Icons.Default.Stop, contentDescription = "Stop")
+                                Icon(imageVector = Icons.Default.Stop, contentDescription = stringResource(R.string.save))
                                 Spacer(modifier = Modifier.width(RecovoSpacing.extraSmall))
-                                Text("Save")
+                                Text(stringResource(R.string.stop_and_save))
                             }
                         }
                     }
 
-                    is RecordingState.Preparing, is RecordingState.Stopping -> {
-                        Text(
-                            text = "Please wait...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    is RecordingState.Preparing -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.height(RecovoDimensions.minTouchTarget)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.5.dp
+                            )
+                            Spacer(modifier = Modifier.width(RecovoSpacing.small))
+                            Text(
+                                text = stringResource(R.string.state_preparing),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    is RecordingState.Stopping -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.height(RecovoDimensions.minTouchTarget)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.5.dp
+                            )
+                            Spacer(modifier = Modifier.width(RecovoSpacing.small))
+                            Text(
+                                text = stringResource(R.string.state_stopping),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -570,12 +645,12 @@ fun RecordScreen(
         )
     }
 
-    // Permission Rationale / Settings Dialog
+    // Permission Settings Dialog
     if (showPermissionRationale) {
         AlertDialog(
             onDismissRequest = { showPermissionRationale = false },
             title = { Text("Permission Settings") },
-            text = { Text("Microphone permission was permanently denied or disabled. Please enable it in App Settings to allow recording.") },
+            text = { Text("Microphone permission was permanently denied. Please enable microphone access in App Settings to allow recording.") },
             confirmButton = {
                 Button(
                     onClick = {
@@ -600,8 +675,8 @@ fun RecordScreen(
     if (showBackConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showBackConfirmDialog = false },
-            title = { Text("Recording in Progress") },
-            text = { Text("A recording is actively running in the background. Would you like to keep recording or stop and save?") },
+            title = { Text(stringResource(R.string.back_dialog_title)) },
+            text = { Text(stringResource(R.string.back_dialog_message)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -610,29 +685,219 @@ fun RecordScreen(
                         onBack()
                     }
                 ) {
-                    Text("Save & Exit")
+                    Text(stringResource(R.string.back_dialog_save))
                 }
             },
             dismissButton = {
-                OutlinedButton(
-                    onClick = {
-                        showBackConfirmDialog = false
-                        onBack()
+                Row {
+                    TextButton(
+                        onClick = { showBackConfirmDialog = false }
+                    ) {
+                        Text(stringResource(R.string.back_dialog_dismiss))
                     }
-                ) {
-                    Text("Continue in Background")
+                    Spacer(modifier = Modifier.width(4.dp))
+                    OutlinedButton(
+                        onClick = {
+                            showBackConfirmDialog = false
+                            onBack()
+                        }
+                    ) {
+                        Text(stringResource(R.string.back_dialog_continue))
+                    }
                 }
             }
         )
     }
 }
 
-private fun formatTimer(elapsedMs: Long): String {
-    val totalSeconds = elapsedMs / 1000
-    val minutes = totalSeconds / 60
+/**
+ * Center status indicator hub displaying distinct iconography and container styling per recording state.
+ */
+@Composable
+private fun StudioStatusHub(
+    state: RecordingState,
+    modifier: Modifier = Modifier
+) {
+    val containerColor = when (state) {
+        is RecordingState.Recording -> MaterialTheme.colorScheme.error.copy(alpha = 0.12f)
+        is RecordingState.Paused -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
+        is RecordingState.Preparing, is RecordingState.Stopping -> MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+        is RecordingState.Saved -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+        is RecordingState.Error -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+        is RecordingState.Idle -> MaterialTheme.colorScheme.surfaceVariant
+    }
+
+    val iconColor = when (state) {
+        is RecordingState.Recording -> MaterialTheme.colorScheme.error
+        is RecordingState.Paused -> MaterialTheme.colorScheme.tertiary
+        is RecordingState.Preparing, is RecordingState.Stopping -> MaterialTheme.colorScheme.primary
+        is RecordingState.Saved -> MaterialTheme.colorScheme.onPrimaryContainer
+        is RecordingState.Error -> MaterialTheme.colorScheme.error
+        is RecordingState.Idle -> MaterialTheme.colorScheme.primary
+    }
+
+    Box(
+        modifier = modifier
+            .size(96.dp)
+            .clip(CircleShape)
+            .background(containerColor),
+        contentAlignment = Alignment.Center
+    ) {
+        when (state) {
+            is RecordingState.Preparing -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(44.dp),
+                    color = iconColor,
+                    strokeWidth = 3.dp
+                )
+            }
+            is RecordingState.Stopping -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(44.dp),
+                    color = iconColor,
+                    strokeWidth = 3.dp
+                )
+            }
+            is RecordingState.Paused -> {
+                if (state.isInterrupted) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.PhoneCallback,
+                        contentDescription = "Recording interrupted",
+                        tint = iconColor,
+                        modifier = Modifier.size(44.dp)
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Pause,
+                        contentDescription = "Recording paused",
+                        tint = iconColor,
+                        modifier = Modifier.size(44.dp)
+                    )
+                }
+            }
+            is RecordingState.Saved -> {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Recording saved",
+                    tint = iconColor,
+                    modifier = Modifier.size(44.dp)
+                )
+            }
+            is RecordingState.Error -> {
+                Icon(
+                    imageVector = Icons.Default.ErrorOutline,
+                    contentDescription = "Recording error",
+                    tint = iconColor,
+                    modifier = Modifier.size(44.dp)
+                )
+            }
+            else -> {
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = "Microphone",
+                    tint = iconColor,
+                    modifier = Modifier.size(44.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Text badge communicating the exact state using icon + text so state is never conveyed by color alone.
+ */
+@Composable
+private fun RecordingStateBadge(
+    state: RecordingState,
+    modifier: Modifier = Modifier
+) {
+    val (label, icon, color) = when (state) {
+        is RecordingState.Idle -> Triple(
+            stringResource(R.string.state_idle),
+            Icons.Default.Mic,
+            MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        is RecordingState.Preparing -> Triple(
+            stringResource(R.string.state_preparing),
+            Icons.Default.HourglassTop,
+            MaterialTheme.colorScheme.primary
+        )
+        is RecordingState.Recording -> Triple(
+            stringResource(R.string.state_recording),
+            Icons.Default.Mic,
+            MaterialTheme.colorScheme.error
+        )
+        is RecordingState.Paused -> if (state.isInterrupted) {
+            Triple(
+                stringResource(R.string.state_interrupted),
+                Icons.Default.Warning,
+                MaterialTheme.colorScheme.tertiary
+            )
+        } else {
+            Triple(
+                stringResource(R.string.state_paused),
+                Icons.Default.Pause,
+                MaterialTheme.colorScheme.tertiary
+            )
+        }
+        is RecordingState.Stopping -> Triple(
+            stringResource(R.string.state_stopping),
+            Icons.Default.HourglassTop,
+            MaterialTheme.colorScheme.primary
+        )
+        is RecordingState.Saved -> Triple(
+            stringResource(R.string.state_saved),
+            Icons.Default.CheckCircle,
+            MaterialTheme.colorScheme.primary
+        )
+        is RecordingState.Error -> Triple(
+            stringResource(R.string.state_error),
+            Icons.Default.ErrorOutline,
+            MaterialTheme.colorScheme.error
+        )
+    }
+
+    Surface(
+        modifier = modifier.semantics { contentDescription = label },
+        shape = RoundedCornerShape(12.dp),
+        color = color.copy(alpha = 0.12f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = RecovoSpacing.small, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = label.uppercase(Locale.US),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
+        }
+    }
+}
+
+/**
+ * High-precision timer formatter:
+ * "00:00" under 1 hour.
+ * "01:05:30" 1 hour and above.
+ */
+fun formatTimer(elapsedMs: Long): String {
+    val totalSeconds = (elapsedMs / 1000).coerceAtLeast(0)
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
     val seconds = totalSeconds % 60
-    val tenths = (elapsedMs % 1000) / 100
-    return String.format(Locale.US, "%02d:%02d.%d", minutes, seconds, tenths)
+    return if (hours > 0) {
+        String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format(Locale.US, "%02d:%02d", minutes, seconds)
+    }
 }
 
 private fun openAppSettings(context: Context) {

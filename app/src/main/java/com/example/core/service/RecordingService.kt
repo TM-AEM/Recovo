@@ -183,14 +183,15 @@ class RecordingService : Service() {
     }
 
     fun startRecording(customName: String? = null, qualityId: String? = null) {
+        val currentState = _recordingState.value
+        if (currentState !is RecordingState.Idle && currentState !is RecordingState.Saved && currentState !is RecordingState.Error) {
+            return
+        }
+
+        _recordingState.value = RecordingState.Preparing
+        _isRecordingActive = true
+
         serviceScope.launch {
-            val currentState = _recordingState.value
-            if (currentState !is RecordingState.Idle && currentState !is RecordingState.Saved && currentState !is RecordingState.Error) {
-                return@launch
-            }
-
-            _isRecordingActive = true
-
             // Explicitly pause any active audio playback before starting microphone recording
             try {
                 val player = AudioPlayerProvider.get(applicationContext)
@@ -257,28 +258,36 @@ class RecordingService : Service() {
     }
 
     fun pauseRecording(isInterrupted: Boolean = false) {
+        val currentState = _recordingState.value
+        if (currentState !is RecordingState.Recording) {
+            return
+        }
         serviceScope.launch {
             recordingEngine.pause(isInterrupted)
         }
     }
 
     fun resumeRecording() {
+        val currentState = _recordingState.value
+        if (currentState !is RecordingState.Paused) {
+            return
+        }
         serviceScope.launch {
             recordingEngine.resume()
         }
     }
 
     fun stopRecording() {
-        serviceScope.launch {
-            val currentState = _recordingState.value
-            if (currentState !is RecordingState.Recording && currentState !is RecordingState.Paused) {
-                return@launch
-            }
-            _recordingState.value = RecordingState.Stopping
-            stopTimerAndMeter()
-            abandonAudioFocus()
-            _isRecordingActive = false
+        val currentState = _recordingState.value
+        if (currentState !is RecordingState.Recording && currentState !is RecordingState.Paused) {
+            return
+        }
+        _recordingState.value = RecordingState.Stopping
+        stopTimerAndMeter()
+        abandonAudioFocus()
+        _isRecordingActive = false
 
+        serviceScope.launch {
             val stopResult = recordingEngine.stop()
             if (stopResult.isSuccess) {
                 val session = stopResult.getOrThrow()
@@ -315,19 +324,22 @@ class RecordingService : Service() {
     }
 
     fun cancelRecording() {
-        serviceScope.launch {
-            val currentState = _recordingState.value
-            if (currentState !is RecordingState.Recording && currentState !is RecordingState.Paused && currentState !is RecordingState.Preparing) {
-                return@launch
-            }
-            _recordingState.value = RecordingState.Idle
-            stopTimerAndMeter()
-            abandonAudioFocus()
-            _isRecordingActive = false
+        val currentState = _recordingState.value
+        if (currentState !is RecordingState.Recording && currentState !is RecordingState.Paused && currentState !is RecordingState.Preparing) {
+            return
+        }
+        _recordingState.value = RecordingState.Idle
+        stopTimerAndMeter()
+        abandonAudioFocus()
+        _isRecordingActive = false
 
-            recordingEngine.cancel()
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
+        serviceScope.launch {
+            try {
+                recordingEngine.cancel()
+            } finally {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
         }
     }
 
@@ -472,10 +484,15 @@ class RecordingService : Service() {
     }
 
     private fun formatElapsed(elapsedMs: Long): String {
-        val totalSecs = elapsedMs / 1000
-        val minutes = totalSecs / 60
+        val totalSecs = (elapsedMs / 1000).coerceAtLeast(0)
+        val hours = totalSecs / 3600
+        val minutes = (totalSecs % 3600) / 60
         val seconds = totalSecs % 60
-        return String.format(Locale.US, "%02d:%02d", minutes, seconds)
+        return if (hours > 0) {
+            String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format(Locale.US, "%02d:%02d", minutes, seconds)
+        }
     }
 
     override fun onDestroy() {
