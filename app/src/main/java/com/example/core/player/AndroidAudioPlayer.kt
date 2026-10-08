@@ -180,6 +180,10 @@ class AndroidAudioPlayer(
 
         val file = File(recording.filePath)
         if (!file.exists()) {
+            // A failed request must not leave a previously prepared player alive: otherwise the old
+            // track keeps playing audio while the state reports this (missing) recording with a stale
+            // duration/position. Tear the old session down before surfacing the error.
+            stopInternal()
             updateMediaSessionState(
                 state = FrameworkPlaybackState.STATE_ERROR,
                 position = 0L,
@@ -188,11 +192,16 @@ class AndroidAudioPlayer(
             _playbackState.value = _playbackState.value.copy(
                 currentRecording = recording,
                 isPlaying = false,
+                currentPositionMs = 0L,
+                durationMs = 0L,
+                isPrepared = false,
                 errorMessage = "Audio file missing from storage"
             )
+            mediaSession?.isActive = false
             return
         }
         if (!file.isFile || file.length() == 0L) {
+            stopInternal()
             updateMediaSessionState(
                 state = FrameworkPlaybackState.STATE_ERROR,
                 position = 0L,
@@ -201,8 +210,12 @@ class AndroidAudioPlayer(
             _playbackState.value = _playbackState.value.copy(
                 currentRecording = recording,
                 isPlaying = false,
+                currentPositionMs = 0L,
+                durationMs = 0L,
+                isPrepared = false,
                 errorMessage = "Audio file is corrupted or empty (0 bytes)"
             )
+            mediaSession?.isActive = false
             return
         }
 

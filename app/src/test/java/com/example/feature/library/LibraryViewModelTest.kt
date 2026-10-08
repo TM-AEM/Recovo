@@ -796,6 +796,67 @@ class LibraryViewModelTest {
         assertTrue(fakeRepository.recordingsFlow.value.isEmpty())
     }
 
+    @Test
+    fun searchWithinFolder_returnsOnlyIntersection() = runTest(testDispatcher) {
+        val folder = FolderEntity(id = 1L, name = "Work")
+        fakeRepository.foldersFlow.value = listOf(folder)
+
+        fun rec(id: Long, name: String, folderId: Long?) = RecordingEntity(
+            id = id, fileName = "$id.m4a", displayName = name, filePath = "/$id.m4a",
+            mimeType = "audio/mp4", format = "M4A", durationMs = 1000L, fileSizeBytes = 1000L,
+            sampleRate = 44100, bitRate = 128000, channelCount = 1, folderId = folderId
+        )
+        // Two recordings inside the folder, one matching the query outside the folder.
+        fakeRepository.setRecordings(
+            listOf(
+                rec(1L, "Meeting Alpha", 1L),
+                rec(2L, "Beta", 1L),
+                rec(3L, "Meeting Gamma", null)
+            )
+        )
+
+        viewModel.selectTab(LibraryTab.FOLDERS)
+        viewModel.selectFolder(folder)
+        viewModel.setSearchQuery("Meeting")
+        advanceTimeBy(300L)
+
+        val state = viewModel.uiState.first {
+            it is LibraryUiState.Success && it.selectedFolder?.id == 1L && it.searchQuery == "Meeting"
+        } as LibraryUiState.Success
+
+        // Only the folder member whose name matches; the non-folder match must not leak in.
+        assertEquals(1, state.recordings.size)
+        assertEquals(1L, state.recordings[0].entity.id)
+    }
+
+    @Test
+    fun searchWithinFavorites_returnsOnlyIntersection() = runTest(testDispatcher) {
+        fun rec(id: Long, name: String, favorite: Boolean) = RecordingEntity(
+            id = id, fileName = "$id.m4a", displayName = name, filePath = "/$id.m4a",
+            mimeType = "audio/mp4", format = "M4A", durationMs = 1000L, fileSizeBytes = 1000L,
+            sampleRate = 44100, bitRate = 128000, channelCount = 1, isFavorite = favorite
+        )
+        fakeRepository.setRecordings(
+            listOf(
+                rec(1L, "Alpha One", true),
+                rec(2L, "Alpha Two", false),
+                rec(3L, "Gamma", true)
+            )
+        )
+
+        viewModel.selectTab(LibraryTab.FAVORITES)
+        viewModel.setSearchQuery("Alpha")
+        advanceTimeBy(300L)
+
+        val state = viewModel.uiState.first {
+            it is LibraryUiState.Success && it.selectedTab == LibraryTab.FAVORITES && it.searchQuery == "Alpha"
+        } as LibraryUiState.Success
+
+        // Intersection of favorite AND name match; the non-favorite match must not appear.
+        assertEquals(1, state.recordings.size)
+        assertEquals(1L, state.recordings[0].entity.id)
+    }
+
     // --- Fake Test Doubles ---
 
     private class FakeAudioPlayer : AudioPlayer {

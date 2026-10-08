@@ -231,4 +231,53 @@ class RecordingPlaybackIntegrationTest {
 
         file1.delete()
     }
+
+    @Test
+    fun playMissingFileWhilePlaying_tearsDownPreviousPlayerNoStaleState() {
+        val fileA = createValidTestAudioFile("stale_missing_a")
+        val recA = createDummyRecording(20L, fileA)
+        player.play(recA)
+        org.robolectric.shadows.ShadowLooper.idleMainLooper()
+        assertTrue(player.playbackState.value.isPlaying)
+        assertTrue(player.playbackState.value.durationMs > 0L)
+
+        val missing = createDummyRecording(21L, java.io.File("/nonexistent/stale_missing.m4a"))
+        player.play(missing)
+
+        val state = player.playbackState.value
+        // The previous track must not keep playing or leave stale duration/position behind.
+        assertFalse(state.isPlaying)
+        assertFalse(state.isPrepared)
+        assertEquals(0L, state.durationMs)
+        assertEquals(0L, state.currentPositionMs)
+        assertEquals("Audio file missing from storage", state.errorMessage)
+        assertEquals(21L, state.currentRecording?.id)
+        fileA.delete()
+    }
+
+    @Test
+    fun playZeroByteFileWhilePlaying_tearsDownPreviousPlayerNoStaleState() {
+        val fileA = createValidTestAudioFile("stale_zero_a")
+        val recA = createDummyRecording(30L, fileA)
+        player.play(recA)
+        org.robolectric.shadows.ShadowLooper.idleMainLooper()
+        assertTrue(player.playbackState.value.isPlaying)
+
+        val zeroFile = File(context.cacheDir, "stale_zero.m4a")
+        if (zeroFile.exists()) zeroFile.delete()
+        zeroFile.writeBytes(ByteArray(0))
+        val zeroRec = createDummyRecording(31L, zeroFile)
+        player.play(zeroRec)
+
+        val state = player.playbackState.value
+        assertFalse(state.isPlaying)
+        assertFalse(state.isPrepared)
+        assertEquals(0L, state.durationMs)
+        assertEquals(0L, state.currentPositionMs)
+        assertEquals("Audio file is corrupted or empty (0 bytes)", state.errorMessage)
+        assertEquals(31L, state.currentRecording?.id)
+
+        fileA.delete()
+        zeroFile.delete()
+    }
 }
