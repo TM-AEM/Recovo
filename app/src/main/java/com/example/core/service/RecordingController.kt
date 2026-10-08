@@ -24,6 +24,9 @@ class RecordingController(val context: Context) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var service: RecordingService? = null
+
+    // True while the ServiceConnection is registered via bindService(). Set on the successful
+    // bind call (before onServiceConnected fires) so release() always unbinds exactly once.
     private var isBound = false
 
     private val _recordingState = MutableStateFlow<RecordingState>(
@@ -77,8 +80,13 @@ class RecordingController(val context: Context) {
     }
 
     private fun bindToService() {
+        if (isBound) {
+            return
+        }
         val intent = Intent(context, RecordingService::class.java)
-        context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        if (context.bindService(intent, connection, Context.BIND_AUTO_CREATE)) {
+            isBound = true
+        }
     }
 
     fun startRecording(displayName: String? = null, qualityId: String? = null) {
@@ -93,9 +101,7 @@ class RecordingController(val context: Context) {
         } else {
             context.startService(intent)
         }
-        if (!isBound) {
-            bindToService()
-        }
+        bindToService()
     }
 
     fun pauseRecording(isInterrupted: Boolean = false) {
@@ -156,8 +162,9 @@ class RecordingController(val context: Context) {
                 context.unbindService(connection)
             } catch (ignored: Exception) {
             }
-            isBound = false
         }
+        isBound = false
+        service = null
     }
 
     fun release() {

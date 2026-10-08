@@ -26,6 +26,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
+import org.robolectric.Shadows.shadowOf
 
 @RunWith(AndroidJUnit4::class)
 class AppLifecycleHardeningTest {
@@ -245,5 +246,44 @@ class AppLifecycleHardeningTest {
         assertTrue(service.recordingState.value is RecordingState.Idle)
 
         serviceController.destroy()
+    }
+
+    @Test
+    fun recordingController_repeatedCommands_doNotCreateDuplicateServiceBindings() {
+        val app = context as android.app.Application
+        fun boundConnectionCount(): Int = shadowOf(app).boundServiceConnections.size
+
+        val controller = RecordingController(context)
+        assertEquals("Constructor must establish exactly one service binding", 1, boundConnectionCount())
+
+        // Rapid duplicate commands must never issue an additional bindService() request
+        controller.startRecording("Binding Regression")
+        assertEquals("startRecording must not create a duplicate binding", 1, boundConnectionCount())
+
+        controller.startRecording("Binding Regression Duplicate")
+        assertEquals("Repeated startRecording must not create a duplicate binding", 1, boundConnectionCount())
+
+        controller.pauseRecording()
+        controller.resumeRecording()
+        controller.stopRecording()
+        assertEquals("Lifecycle commands must not create duplicate bindings", 1, boundConnectionCount())
+
+        controller.release()
+        assertEquals("release() must fully unbind the single established binding", 0, boundConnectionCount())
+    }
+
+    @Test
+    fun recordingController_unbind_isIdempotent() {
+        val app = context as android.app.Application
+        fun boundConnectionCount(): Int = shadowOf(app).boundServiceConnections.size
+
+        val controller = RecordingController(context)
+        assertEquals(1, boundConnectionCount())
+
+        controller.unbind()
+        controller.unbind()
+        controller.release()
+
+        assertEquals("Repeated unbind/release must not throw and must fully clear the binding", 0, boundConnectionCount())
     }
 }
