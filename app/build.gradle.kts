@@ -34,10 +34,35 @@ android {
       }
     }
     create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
+      // debug.keystore is intentionally gitignored, so a clean checkout has none.
+      // Generate the standard Android debug keystore on first build to keep debug
+      // builds reproducible from a fresh clone without committing a signing key.
+      val debugKeystore = file("${rootDir}/debug.keystore")
+      if (!debugKeystore.exists()) {
+        val keytool = File(System.getProperty("java.home"), "bin/keytool")
+        if (keytool.exists()) {
+          try {
+            providers.exec {
+              commandLine(
+                keytool.absolutePath, "-genkeypair",
+                "-keystore", debugKeystore.absolutePath,
+                "-storepass", "android", "-keypass", "android",
+                "-alias", "androiddebugkey",
+                "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000",
+                "-dname", "CN=Android Debug,O=Android,C=US"
+              )
+            }.result.get()
+          } catch (e: Exception) {
+            logger.warn("Recovo: could not generate debug keystore: ${e.message}")
+          }
+        }
+      }
+      if (debugKeystore.exists()) {
+        storeFile = debugKeystore
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
     }
   }
 
