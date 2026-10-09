@@ -5,13 +5,16 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.test.runTest
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.nio.file.Files
 
 @RunWith(AndroidJUnit4::class)
 class StorageManagerTest {
@@ -165,5 +168,117 @@ class StorageManagerTest {
         assertTrue("Active empty file must be preserved", activeEmpty.exists())
         assertFalse("Orphaned empty file must be deleted", orphanEmpty.exists())
         assertTrue("Nonzero valid audio file must be preserved", validNonzero.exists())
+    }
+
+    // --- Phase 31: storage path-boundary hardening regression coverage ---
+
+    @Test
+    fun deleteFile_allowsValidFileDirectlyInsideRecordingsDirectory() = runTest {
+        val fileResult = storageManager.createRecordingFile(desiredName = "InsideValid", extension = "m4a")
+        val file = (fileResult as StorageResult.Success).data
+        file.writeBytes(ByteArray(128))
+        assertTrue(file.exists())
+
+        val deleteResult = storageManager.deleteFile(file.absolutePath)
+        assertTrue(deleteResult is StorageResult.Success)
+        assertFalse(file.exists())
+    }
+
+    @Test
+    fun deleteFile_returnsFileNotFoundForMissingFileInsideRecordingsDirectory() = runTest {
+        val missing = File(testDir, "missing_inside.m4a")
+        val result = storageManager.deleteFile(missing.absolutePath)
+        assertTrue(result is StorageResult.Error)
+        assertEquals(StorageErrorType.FILE_NOT_FOUND, (result as StorageResult.Error).errorType)
+    }
+
+    @Test
+    fun deleteFile_rejectsUnrelatedFileOutsideRecordingsDirectory() = runTest {
+        val outsideFile = File(context.cacheDir, "unrelated_phase31.txt")
+            .apply { writeText("do-not-delete") }
+        try {
+            val result = storageManager.deleteFile(outsideFile.absolutePath)
+            assertTrue(result is StorageResult.Error)
+            assertEquals(StorageErrorType.SECURITY_ERROR, (result as StorageResult.Error).errorType)
+            assertTrue(outsideFile.exists())
+            assertEquals("do-not-delete", outsideFile.readText())
+        } finally {
+            outsideFile.delete()
+        }
+    }
+
+    @Test
+    fun deleteFile_rejectsSiblingDirectorySharingRecordingsPrefix() = runTest {
+        // Sibling directory whose name starts with the recordings directory name:
+        // "${testDir.name}_sibling". A textual prefix check would wrongly accept it.
+        val siblingDir = File(testDir.parentFile, "${testDir.name}_sibling").apply { mkdirs() }
+        val siblingFile = File(siblingDir, "sibling_secret.m4a").apply { writeBytes(ByteArray(64)) }
+        try {
+            val result = storageManager.deleteFile(siblingFile.absolutePath)
+            assertTrue(result is StorageResult.Error)
+            assertEquals(StorageErrorType.SECURITY_ERROR, (result as StorageResult.Error).errorType)
+            assertTrue("Sibling file must be preserved", siblingFile.exists())
+            assertEquals(64L, siblingFile.length())
+        } finally {
+            siblingDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun deleteFile_rejectsSiblingPathWithoutAlteringContents() = runTest {
+        val siblingDir = File(testDir.parentFile, "${testDir.name}_sibling").apply { mkdirs() }
+        val siblingFile = File(siblingDir, "content.m4a")
+        val original = ByteArray(256) { it.toByte() }
+        siblingFile.writeBytes(original)
+        try {
+            storageManager.deleteFile(siblingFile.absolutePath)
+            assertTrue(siblingFile.exists())
+            assertArrayEquals(original, siblingFile.readBytes())
+        } finally {
+            siblingDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun getFileSizeBytes_rejectsSiblingDirectorySharingRecordingsPrefix() = runTest {
+        val siblingDir = File(testDir.parentFile, "${testDir.name}_sibling").apply { mkdirs() }
+        val siblingFile = File(siblingDir, "sibling_size.m4a").apply { writeBytes(ByteArray(321)) }
+        try {
+            val result = storageManager.getFileSizeBytes(siblingFile.absolutePath)
+            assertTrue(result is StorageResult.Error)
+            assertEquals(StorageErrorType.SECURITY_ERROR, (result as StorageResult.Error).errorType)
+            assertTrue("Sibling file must be preserved", siblingFile.exists())
+        } finally {
+            siblingDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun deleteFile_rejectsSymlinkInsideRecordingsPointingOutside() = runTest {
+        val outsideTarget = File(context.cacheDir, "symlink_outside_target_phase31.txt")
+            .apply { writeText("outside-content") }
+        val link = File(testDir, "escaping_link.txt")
+        val symlinkSupported = try {
+            Files.createSymbolicLink(link.toPath(), outsideTarget.toPath())
+            true
+        } catch (e: Exception) {
+            // Some sandboxed test filesystems disallow symlink creation; documented limitation.
+            false
+        }
+        assumeTrue("Symlinks unsupported in this environment", symlinkSupported)
+        try {
+            val deleteResult = storageManager.deleteFile(link.absolutePath)
+            assertTrue(deleteResult is StorageResult.Error)
+            assertEquals(StorageErrorType.SECURITY_ERROR, (deleteResult as StorageResult.Error).errorType)
+            assertTrue("Symlink target outside recordings must be preserved", outsideTarget.exists())
+            assertEquals("outside-content", outsideTarget.readText())
+
+            val sizeResult = storageManager.getFileSizeBytes(link.absolutePath)
+            assertTrue(sizeResult is StorageResult.Error)
+            assertEquals(StorageErrorType.SECURITY_ERROR, (sizeResult as StorageResult.Error).errorType)
+        } finally {
+            link.delete()
+            outsideTarget.delete()
+        }
     }
 }

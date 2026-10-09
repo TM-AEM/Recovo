@@ -151,7 +151,19 @@ class StorageManager(
     }
 
     /**
-     * Checks if a file exists given its path.
+     * Returns true only when [file] canonically resolves to a direct child of the recordings
+     * directory. Canonicalization resolves symlinks, so a link that escapes the directory is
+     * rejected. A plain textual prefix check (`startsWith`) is insufficient because sibling
+     * paths can share the recordings directory's prefix (e.g. `recordings_backup`).
+     */
+    private fun isDirectChildOfRecordingsDir(file: File): Boolean {
+        return file.canonicalFile.parentFile == baseDirectory.canonicalFile
+    }
+
+    /**
+     * Checks if a file exists given its path. Read-only and non-destructive: no production
+     * caller relies on this for a recordings boundary check, so it is intentionally left
+     * unmapped to [isDirectChildOfRecordingsDir].
      */
     suspend fun fileExists(filePath: String): Boolean = withContext(ioDispatcher) {
         val file = File(filePath)
@@ -164,8 +176,7 @@ class StorageManager(
     suspend fun deleteFile(filePath: String): StorageResult<Boolean> = withContext(ioDispatcher) {
         try {
             val file = File(filePath)
-            val baseCanonical = baseDirectory.canonicalFile
-            if (!file.canonicalPath.startsWith(baseCanonical.canonicalPath)) {
+            if (!isDirectChildOfRecordingsDir(file)) {
                 return@withContext StorageResult.Error(
                     errorType = StorageErrorType.SECURITY_ERROR,
                     message = "Access denied: cannot delete file outside recordings directory: $filePath"
@@ -207,8 +218,7 @@ class StorageManager(
      */
     suspend fun getFileSizeBytes(filePath: String): StorageResult<Long> = withContext(ioDispatcher) {
         val file = File(filePath)
-        val baseCanonical = baseDirectory.canonicalFile
-        if (!file.canonicalPath.startsWith(baseCanonical.canonicalPath)) {
+        if (!isDirectChildOfRecordingsDir(file)) {
             return@withContext StorageResult.Error(
                 errorType = StorageErrorType.SECURITY_ERROR,
                 message = "Access denied: cannot access file size outside recordings directory: $filePath"
