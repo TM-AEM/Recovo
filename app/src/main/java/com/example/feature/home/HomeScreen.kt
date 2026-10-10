@@ -64,7 +64,7 @@ fun HomeScreen(
                 color = MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = "Voice Recorder & Audio Studio",
+                text = stringResource(R.string.home_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -83,14 +83,14 @@ fun HomeScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Studio Ready",
+                    text = stringResource(R.string.home_card_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(RecovoSpacing.extraSmall))
                 Text(
-                    text = "Android 11+ High-Fidelity Audio Foundation",
+                    text = stringResource(R.string.home_card_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -120,7 +120,7 @@ fun HomeScreen(
                     contentDescription = null,
                     modifier = Modifier.padding(end = RecovoSpacing.small)
                 )
-                Text(text = "Start Recording")
+                Text(text = stringResource(R.string.start_recording))
             }
 
             OutlinedButton(
@@ -135,7 +135,7 @@ fun HomeScreen(
                     contentDescription = null,
                     modifier = Modifier.padding(end = RecovoSpacing.small)
                 )
-                Text(text = "Audio Library")
+                Text(text = stringResource(R.string.library_title))
             }
         }
     }

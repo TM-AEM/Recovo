@@ -1,6 +1,8 @@
 package com.example.feature.library
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -59,6 +61,7 @@ fun RenameRecordingDialog(
 ) {
     var name by remember { mutableStateOf(recording.displayName) }
     var errorText by remember { mutableStateOf<String?>(null) }
+    val emptyError = stringResource(R.string.rename_error_empty)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -86,7 +89,7 @@ fun RenameRecordingDialog(
                 onClick = {
                     val trimmed = name.trim()
                     if (trimmed.isBlank()) {
-                        errorText = "Name cannot be empty"
+                        errorText = emptyError
                     } else {
                         onConfirm(trimmed)
                     }
@@ -114,6 +117,8 @@ fun FolderInputDialog(
 ) {
     var name by remember { mutableStateOf(initialName) }
     var errorText by remember { mutableStateOf<String?>(null) }
+    val blankError = stringResource(R.string.folder_error_blank)
+    val maxError = stringResource(R.string.folder_error_max)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -141,9 +146,9 @@ fun FolderInputDialog(
                 onClick = {
                     val trimmed = name.trim()
                     if (trimmed.isBlank()) {
-                        errorText = "Folder name cannot be blank"
+                        errorText = blankError
                     } else if (trimmed.length > 50) {
-                        errorText = "Maximum 50 characters"
+                        errorText = maxError
                     } else {
                         onConfirm(trimmed)
                     }
@@ -171,6 +176,8 @@ fun TagInputDialog(
 ) {
     var name by remember { mutableStateOf(initialName) }
     var errorText by remember { mutableStateOf<String?>(null) }
+    val blankError = stringResource(R.string.tag_error_blank)
+    val maxError = stringResource(R.string.tag_error_max)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -198,9 +205,9 @@ fun TagInputDialog(
                 onClick = {
                     val trimmed = name.trim()
                     if (trimmed.isBlank()) {
-                        errorText = "Tag name cannot be blank"
+                        errorText = blankError
                     } else if (trimmed.length > 30) {
-                        errorText = "Maximum 30 characters"
+                        errorText = maxError
                     } else {
                         onConfirm(trimmed)
                     }
@@ -233,6 +240,7 @@ fun MoveToFolderDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(280.dp)
+                    .selectableGroup()
             ) {
                 // Option for No Folder
                 item {
@@ -241,7 +249,10 @@ fun MoveToFolderDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable { onFolderSelected(null) },
+                            .selectable(
+                                selected = isSelected,
+                                onClick = { onFolderSelected(null) }
+                            ),
                         color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
                     ) {
                         Row(
@@ -272,7 +283,10 @@ fun MoveToFolderDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable { onFolderSelected(folder.id) },
+                            .selectable(
+                                selected = isSelected,
+                                onClick = { onFolderSelected(folder.id) }
+                            ),
                         color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
                     ) {
                         Row(
@@ -296,7 +310,7 @@ fun MoveToFolderDialog(
                             if (isSelected) {
                                 Icon(
                                     imageVector = Icons.Default.Check,
-                                    contentDescription = "Selected",
+                                    contentDescription = stringResource(R.string.library_cd_selected),
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
@@ -355,7 +369,7 @@ fun ManageTagsDialog(
                             },
                             enabled = newTagName.isNotBlank()
                         ) {
-                            Text("Add")
+                            Text(stringResource(R.string.library_dialog_add))
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
@@ -373,7 +387,7 @@ fun ManageTagsDialog(
 
                 if (allTags.isEmpty()) {
                     Text(
-                        text = "No tags created yet. Tap above to create one.",
+                        text = stringResource(R.string.library_dialog_no_tags),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 16.dp)
@@ -390,25 +404,22 @@ fun ManageTagsDialog(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        selectedIds = if (isChecked) {
-                                            selectedIds - tag.id
-                                        } else {
-                                            selectedIds + tag.id
+                                    .toggleable(
+                                        value = isChecked,
+                                        onValueChange = { checked ->
+                                            selectedIds = if (checked) {
+                                                selectedIds + tag.id
+                                            } else {
+                                                selectedIds - tag.id
+                                            }
                                         }
-                                    }
+                                    )
                                     .padding(vertical = 6.dp, horizontal = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Checkbox(
                                     checked = isChecked,
-                                    onCheckedChange = { checked ->
-                                        selectedIds = if (checked) {
-                                            selectedIds + tag.id
-                                        } else {
-                                            selectedIds - tag.id
-                                        }
-                                    }
+                                    onCheckedChange = null
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Icon(
@@ -464,17 +475,24 @@ fun SortOrderDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.sort_by)) },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectableGroup()
+            ) {
                 options.forEach { (order, label) ->
                     val isSelected = currentSortOrder == order
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                onSelectSortOrder(order)
-                                onDismiss()
-                            }
+                            .selectable(
+                                selected = isSelected,
+                                onClick = {
+                                    onSelectSortOrder(order)
+                                    onDismiss()
+                                }
+                            )
                             .padding(vertical = 10.dp, horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {

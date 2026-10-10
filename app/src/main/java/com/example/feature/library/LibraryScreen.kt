@@ -90,12 +90,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -170,7 +174,7 @@ fun LibraryScreen(
                 TopAppBar(
                     title = {
                         Text(
-                            text = "${selectedIds.size} selected",
+                            text = pluralStringResource(R.plurals.library_selected_count, selectedIds.size, selectedIds.size),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -180,7 +184,7 @@ fun LibraryScreen(
                             onClick = { viewModel.exitSelectionMode() },
                             modifier = Modifier.testTag("selection_exit_button")
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Exit selection")
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.library_cd_exit_selection))
                         }
                     },
                     actions = {
@@ -188,19 +192,19 @@ fun LibraryScreen(
                             onClick = { viewModel.selectAll() },
                             modifier = Modifier.testTag("selection_select_all_button")
                         ) {
-                            Icon(Icons.Default.SelectAll, contentDescription = "Select all")
+                            Icon(Icons.Default.SelectAll, contentDescription = stringResource(R.string.library_cd_select_all))
                         }
                         IconButton(
                             onClick = { viewModel.setFavoritesForSelected(true) },
                             modifier = Modifier.testTag("selection_favorite_button")
                         ) {
-                            Icon(Icons.Default.Star, contentDescription = "Favorite selected")
+                            Icon(Icons.Default.Star, contentDescription = stringResource(R.string.library_cd_favorite_selected))
                         }
                         IconButton(
                             onClick = { showBulkMoveFolderDialog = true },
                             modifier = Modifier.testTag("selection_move_button")
                         ) {
-                            Icon(Icons.Default.DriveFileMove, contentDescription = "Move to folder")
+                            Icon(Icons.Default.DriveFileMove, contentDescription = stringResource(R.string.library_cd_move_to_folder))
                         }
                         IconButton(
                             onClick = { showBulkDeleteDialog = true },
@@ -208,7 +212,7 @@ fun LibraryScreen(
                         ) {
                             Icon(
                                 Icons.Default.Close,
-                                contentDescription = "Delete selected",
+                                contentDescription = stringResource(R.string.library_cd_delete_selected),
                                 tint = MaterialTheme.colorScheme.error
                             )
                         }
@@ -228,7 +232,7 @@ fun LibraryScreen(
                             if (state is LibraryUiState.Success) {
                                 val count = state.recordings.size
                                 Text(
-                                    text = if (count == 1) "1 recording" else "$count recordings",
+                                    text = pluralStringResource(R.plurals.library_recording_count, count, count),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -248,7 +252,7 @@ fun LibraryScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back"
+                                contentDescription = stringResource(R.string.library_cd_back)
                             )
                         }
                     },
@@ -300,12 +304,15 @@ fun LibraryScreen(
         ) {
             when (val successState = uiState) {
                 is LibraryUiState.Loading -> {
+                    val loadingCd = stringResource(R.string.a11y_loading_library)
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator(
-                            modifier = Modifier.testTag("library_loading_indicator")
+                            modifier = Modifier
+                                .testTag("library_loading_indicator")
+                                .semantics { contentDescription = loadingCd }
                         )
                     }
                 }
@@ -326,7 +333,7 @@ fun LibraryScreen(
                         )
                         Spacer(modifier = Modifier.height(RecovoSpacing.medium))
                         Text(
-                            text = "Error Loading Library",
+                            text = stringResource(R.string.library_error_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -500,7 +507,7 @@ fun LibraryScreen(
     recordingToDelete?.let { recording ->
         ConfirmDeleteDialog(
             title = stringResource(R.string.delete_recording_title),
-            message = "Are you sure you want to delete \"${recording.displayName}\"? This action permanently deletes the audio file from your device.",
+            message = stringResource(R.string.library_delete_recording_message, recording.displayName),
             onDismiss = { recordingToDelete = null },
             onConfirm = {
                 viewModel.deleteRecording(recording)
@@ -513,7 +520,7 @@ fun LibraryScreen(
     if (showBulkDeleteDialog) {
         ConfirmDeleteDialog(
             title = stringResource(R.string.delete_selected_title),
-            message = "Are you sure you want to delete ${selectedIds.size} recordings? This action removes all selected audio files permanently.",
+            message = pluralStringResource(R.plurals.library_bulk_delete_message, selectedIds.size, selectedIds.size),
             onDismiss = { showBulkDeleteDialog = false },
             onConfirm = {
                 viewModel.deleteSelectedRecordings()
@@ -789,11 +796,14 @@ fun FoldersSubHeader(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = onBackToAllFolders,
-                        modifier = Modifier.testTag("folder_detail_back_button")
+                        modifier = Modifier
+                            .size(RecovoDimensions.minTouchTarget)
+                            .wrapContentSize(Alignment.Center)
+                            .testTag("folder_detail_back_button")
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back to folders",
+                            contentDescription = stringResource(R.string.library_cd_back_to_folders),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -815,17 +825,21 @@ fun FoldersSubHeader(
                 Row {
                     IconButton(
                         onClick = { onRenameFolder(openFolder) },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier
+                            .size(RecovoDimensions.minTouchTarget)
+                            .wrapContentSize(Alignment.Center)
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = "Rename folder", modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.library_cd_rename_folder), modifier = Modifier.size(18.dp))
                     }
                     IconButton(
                         onClick = { onDeleteFolder(openFolder) },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier
+                            .size(RecovoDimensions.minTouchTarget)
+                            .wrapContentSize(Alignment.Center)
                     ) {
                         Icon(
                             Icons.Default.Close,
-                            contentDescription = "Delete folder",
+                            contentDescription = stringResource(R.string.library_cd_delete_folder),
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(18.dp)
                         )
@@ -846,7 +860,7 @@ fun FoldersSubHeader(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Folders (${folders.size})",
+                    text = stringResource(R.string.library_folders_header, folders.size),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -919,16 +933,18 @@ fun FoldersSubHeader(
                                 Box {
                                     IconButton(
                                         onClick = { menuExpanded = true },
-                                        modifier = Modifier.size(32.dp)
+                                        modifier = Modifier
+                                            .size(RecovoDimensions.minTouchTarget)
+                                            .wrapContentSize(Alignment.Center)
                                     ) {
-                                        Icon(Icons.Default.MoreVert, contentDescription = "Folder options", modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.library_folder_options), modifier = Modifier.size(16.dp))
                                     }
                                     DropdownMenu(
                                         expanded = menuExpanded,
                                         onDismissRequest = { menuExpanded = false }
                                     ) {
                                         DropdownMenuItem(
-                                            text = { Text("Open") },
+                                            text = { Text(stringResource(R.string.library_folder_open)) },
                                             onClick = {
                                                 menuExpanded = false
                                                 onFolderClick(folder)
@@ -982,7 +998,7 @@ fun TagsSubHeader(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Tags (${tags.size})",
+                text = stringResource(R.string.library_tags_header, tags.size),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1012,7 +1028,7 @@ fun TagsSubHeader(
                         FilterChip(
                             selected = isSelected,
                             onClick = { onTagSelected(tag) },
-                            label = { Text("${tag.name} ($count)") },
+                            label = { Text(stringResource(R.string.library_tag_chip, tag.name, count)) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.Label,
@@ -1120,7 +1136,7 @@ fun RecordingCard(
                     ) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "Pause" else "Play"
+                            contentDescription = if (isPlaying) stringResource(R.string.playback_cd_pause) else stringResource(R.string.playback_cd_play)
                         )
                     }
                 }
@@ -1147,7 +1163,7 @@ fun RecordingCard(
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = " • ",
+                            text = stringResource(R.string.library_meta_separator),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1157,7 +1173,7 @@ fun RecordingCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = " • ",
+                            text = stringResource(R.string.library_meta_separator),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1181,7 +1197,7 @@ fun RecordingCard(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = item.fileErrorMessage ?: "File unavailable",
+                                text = item.fileErrorMessage ?: stringResource(R.string.library_file_unavailable),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.error,
                                 fontWeight = FontWeight.Medium
@@ -1214,7 +1230,7 @@ fun RecordingCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Recording options",
+                            contentDescription = stringResource(R.string.library_cd_recording_options),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -1225,7 +1241,7 @@ fun RecordingCard(
                     ) {
                         if (item.isFileAvailable) {
                             DropdownMenuItem(
-                                text = { Text(if (isPlaying) "Pause" else "Play") },
+                                text = { Text(if (isPlaying) stringResource(R.string.playback_cd_pause) else stringResource(R.string.playback_cd_play)) },
                                 onClick = {
                                     menuExpanded = false
                                     onPlayClick()
@@ -1263,7 +1279,7 @@ fun RecordingCard(
                         DropdownMenuItem(
                             text = {
                                 Text(
-                                    text = if (!item.isFileAvailable) "Remove missing record" else stringResource(R.string.delete),
+                                    text = if (!item.isFileAvailable) stringResource(R.string.library_cd_remove_missing) else stringResource(R.string.delete),
                                     color = MaterialTheme.colorScheme.error
                                 )
                             },
@@ -1336,7 +1352,7 @@ fun RecordingCard(
 
                     if (item.tags.size > 3) {
                         Text(
-                            text = "+${item.tags.size - 3}",
+                            text = stringResource(R.string.library_tag_overflow, item.tags.size - 3),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1413,13 +1429,13 @@ fun EmptyStateView(
             }
             Spacer(modifier = Modifier.height(RecovoSpacing.medium))
             Text(
-                text = "No Favorites Yet",
+                text = stringResource(R.string.library_empty_favorites_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(RecovoSpacing.extraSmall))
             Text(
-                text = "Tap the star icon on any recording to add it to your favorites.",
+                text = stringResource(R.string.library_empty_favorites_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1440,13 +1456,13 @@ fun EmptyStateView(
             }
             Spacer(modifier = Modifier.height(RecovoSpacing.medium))
             Text(
-                text = "Folder is Empty",
+                text = stringResource(R.string.library_empty_folder_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(RecovoSpacing.extraSmall))
             Text(
-                text = "Move recordings into this folder from their context menu.",
+                text = stringResource(R.string.library_empty_folder_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1486,14 +1502,14 @@ fun EmptyLibraryState(
         }
         Spacer(modifier = Modifier.height(RecovoSpacing.large))
         Text(
-            text = "No Recordings Yet",
+            text = stringResource(R.string.library_empty_title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
         )
         Spacer(modifier = Modifier.height(RecovoSpacing.small))
         Text(
-            text = "Your voice memos and recorded audio will appear here ready to play and manage.",
+            text = stringResource(R.string.library_empty_desc),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = RecovoSpacing.medium)
@@ -1513,7 +1529,7 @@ fun EmptyLibraryState(
                 contentDescription = null,
                 modifier = Modifier.padding(end = RecovoSpacing.small)
             )
-            Text("Start Recording")
+            Text(stringResource(R.string.start_recording))
         }
     }
 }

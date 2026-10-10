@@ -1,6 +1,7 @@
 package com.example.feature.library
 
 import android.content.Context
+import android.text.format.DateFormat
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -578,6 +579,11 @@ class LibraryViewModel(
         private const val KEY_SELECTED_TAB = "key_library_selected_tab"
         private const val KEY_SORT_ORDER = "key_library_sort_order"
 
+        // ICU skeleton for date + time. The framework expands it into the
+        // locale's own ordering, separators and month names (e.g. English vs
+        // Arabic) instead of a hard-coded pattern.
+        private const val DATE_TIME_SKELETON = "yMMMdhmma"
+
         fun formatDuration(durationMs: Long): String {
             val totalSecs = (durationMs / 1000).coerceAtLeast(0)
             val minutes = totalSecs / 60
@@ -603,7 +609,9 @@ class LibraryViewModel(
 
         fun formatDate(timestampMs: Long): String {
             return try {
-                SimpleDateFormat("MMM d, yyyy • h:mm a", Locale.getDefault()).format(Date(timestampMs))
+                val locale = Locale.getDefault()
+                val pattern = DateFormat.getBestDateTimePattern(locale, DATE_TIME_SKELETON)
+                SimpleDateFormat(pattern, locale).format(Date(timestampMs))
             } catch (e: Exception) {
                 "Recent"
             }

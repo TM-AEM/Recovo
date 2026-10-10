@@ -51,13 +51,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.core.designsystem.theme.RecovoDimensions
 import com.example.core.designsystem.theme.RecovoSpacing
 import com.example.core.player.PlaybackState
@@ -96,6 +101,15 @@ fun PlaybackBar(
 
     var hudText by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
+    val seekPositionDescription = stringResource(
+        R.string.a11y_seek_position,
+        LibraryViewModel.formatDuration(currentMs),
+        LibraryViewModel.formatDuration(durationMs)
+    )
+    val fastForwardHud = stringResource(R.string.playback_hud_fast_forward)
+    val seekPurpose = stringResource(R.string.a11y_playback_seek)
+    val rewindHud = stringResource(R.string.playback_hud_rewind)
+    val forwardHud = stringResource(R.string.playback_hud_forward)
 
     fun triggerHud(text: String) {
         hudText = text
@@ -141,11 +155,11 @@ fun PlaybackBar(
                     )
                     IconButton(
                         onClick = onDismissError,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(RecovoDimensions.minTouchTarget)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Dismiss error",
+                            contentDescription = stringResource(R.string.playback_cd_dismiss_error),
                             tint = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.size(16.dp)
                         )
@@ -163,20 +177,20 @@ fun PlaybackBar(
                             onDoubleTap = { offset ->
                                 if (offset.x < size.width / 2) {
                                     onRewind()
-                                    triggerHud("-10s")
+                                    triggerHud(rewindHud)
                                 } else {
                                     onForward()
-                                    triggerHud("+10s")
+                                    triggerHud(forwardHud)
                                 }
                             },
                             onLongPress = {
                                 onStartFastForward()
-                                triggerHud("2.0× Fast Forward")
+                                triggerHud(fastForwardHud)
                             },
                             onPress = {
                                 tryAwaitRelease()
                                 onStopFastForward()
-                                if (hudText == "2.0× Fast Forward") {
+                                if (hudText == fastForwardHud) {
                                     hudText = null
                                 }
                             }
@@ -235,12 +249,12 @@ fun PlaybackBar(
                     IconButton(
                         onClick = onClose,
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(RecovoDimensions.minTouchTarget)
                             .testTag("playback_close_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Close player",
+                            contentDescription = stringResource(R.string.playback_cd_close_player),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -261,7 +275,11 @@ fun PlaybackBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(28.dp)
-                    .testTag("playback_seek_bar"),
+                    .testTag("playback_seek_bar")
+                    .semantics {
+                        contentDescription = seekPurpose
+                        stateDescription = seekPositionDescription
+                    },
                 colors = SliderDefaults.colors(
                     thumbColor = MaterialTheme.colorScheme.primary,
                     activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -305,7 +323,7 @@ fun PlaybackBar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Shuffle,
-                        contentDescription = "Shuffle playlist",
+                        contentDescription = stringResource(R.string.playback_cd_shuffle),
                         tint = if (playbackState.isShuffleEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     )
                 }
@@ -319,7 +337,7 @@ fun PlaybackBar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.SkipPrevious,
-                        contentDescription = "Previous track"
+                        contentDescription = stringResource(R.string.playback_cd_previous)
                     )
                 }
 
@@ -332,7 +350,7 @@ fun PlaybackBar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Replay10,
-                        contentDescription = "Rewind 10 seconds"
+                        contentDescription = stringResource(R.string.playback_cd_rewind_10)
                     )
                 }
 
@@ -349,7 +367,7 @@ fun PlaybackBar(
                 ) {
                     Icon(
                         imageVector = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
+                        contentDescription = if (playbackState.isPlaying) stringResource(R.string.playback_cd_pause) else stringResource(R.string.playback_cd_play),
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -363,7 +381,7 @@ fun PlaybackBar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Forward10,
-                        contentDescription = "Forward 10 seconds"
+                        contentDescription = stringResource(R.string.playback_cd_forward_10)
                     )
                 }
 
@@ -376,7 +394,7 @@ fun PlaybackBar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.SkipNext,
-                        contentDescription = "Next track"
+                        contentDescription = stringResource(R.string.playback_cd_next)
                     )
                 }
 
@@ -391,21 +409,21 @@ fun PlaybackBar(
                         RepeatMode.OFF -> {
                             Icon(
                                 imageVector = Icons.Default.Repeat,
-                                contentDescription = "Repeat off",
+                                contentDescription = stringResource(R.string.playback_cd_repeat_off),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                             )
                         }
                         RepeatMode.ALL -> {
                             Icon(
                                 imageVector = Icons.Default.Repeat,
-                                contentDescription = "Repeat all",
+                                contentDescription = stringResource(R.string.playback_cd_repeat_all),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
                         RepeatMode.ONE -> {
                             Icon(
                                 imageVector = Icons.Default.RepeatOne,
-                                contentDescription = "Repeat one",
+                                contentDescription = stringResource(R.string.playback_cd_repeat_one),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
@@ -425,7 +443,7 @@ fun PlaybackBar(
                 FilterChip(
                     selected = playbackState.playbackSpeed != 1.0f,
                     onClick = onOpenSpeedDialog,
-                    label = { Text("${playbackState.playbackSpeed}×") },
+                    label = { Text(stringResource(R.string.playback_speed_chip, playbackState.playbackSpeed.toString())) },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Speed,
@@ -439,8 +457,8 @@ fun PlaybackBar(
                 // Sleep Timer Chip
                 val timerLabel = playbackState.sleepTimerRemainingMs?.let { remainingMs ->
                     val mins = (remainingMs / 60000L).coerceAtLeast(1L)
-                    "${mins}m remaining"
-                } ?: "Timer: Off"
+                    stringResource(R.string.playback_timer_remaining, mins.toInt())
+                } ?: stringResource(R.string.playback_timer_off)
 
                 FilterChip(
                     selected = playbackState.sleepTimerRemainingMs != null,

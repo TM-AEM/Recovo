@@ -96,4 +96,115 @@
     <string name="back_dialog_save">Save &amp; Exit</string>
     <string name="back_dialog_continue">Continue in Background</string>
     <string name="back_dialog_dismiss">Stay on Screen</string>
+
+    <!-- Phase 33D-1: Record screen strings -->
+    <string name="record_permission_title">Microphone Permission Required</string>
+    <string name="record_permission_message">Recovo requires microphone access to record high-fidelity audio locally on your device.</string>
+    <string name="record_permission_grant">Grant Permission</string>
+    <string name="record_clear_title">Clear Title</string>
+    <string name="record_dismiss">Dismiss</string>
+    <string name="record_permission_settings_title">Permission Settings</string>
+    <string name="record_permission_settings_message">Microphone permission was permanently denied. Please enable microphone access in App Settings to allow recording.</string>
+    <string name="record_open_settings">Open Settings</string>
+    <string name="record_cd_interrupted">Recording interrupted</string>
+    <string name="record_cd_paused">Recording paused</string>
+    <string name="record_cd_saved">Recording saved</string>
+    <string name="record_cd_error">Recording error</string>
+    <string name="record_cd_microphone">Microphone</string>
+
+    <!-- Phase 33D-1: Playback bar strings -->
+    <string name="playback_cd_dismiss_error">Dismiss error</string>
+    <string name="playback_cd_close_player">Close player</string>
+    <string name="playback_cd_shuffle">Shuffle playlist</string>
+    <string name="playback_cd_previous">Previous track</string>
+    <string name="playback_cd_rewind_10">Rewind 10 seconds</string>
+    <string name="playback_cd_forward_10">Forward 10 seconds</string>
+    <string name="playback_cd_next">Next track</string>
+    <string name="playback_cd_repeat_off">Repeat off</string>
+    <string name="playback_cd_repeat_all">Repeat all</string>
+    <string name="playback_cd_repeat_one">Repeat one</string>
+    <string name="playback_cd_play">Play</string>
+    <string name="playback_cd_pause">Pause</string>
+    <string name="playback_hud_rewind">-10s</string>
+    <string name="playback_hud_forward">+10s</string>
+    <string name="playback_hud_fast_forward">2.0× Fast Forward</string>
+    <string name="playback_timer_remaining">%1$dm remaining</string>
+    <string name="playback_timer_off">Timer: Off</string>
+
+    <!-- Phase 33D-6: Recording quality (localized presentation layer) -->
+    <string name="quality_card_heading">Recording Quality Preset</string>
+    <string name="quality_standard_short">Standard</string>
+    <string name="quality_standard_title">Standard Quality</string>
+    <string name="quality_standard_subtitle">96 kbps • 44.1 kHz • Mono</string>
+    <string name="quality_standard_description">Optimized for voice notes, speech clarity, and compact file size.</string>
+    <string name="quality_high_short">High</string>
+    <string name="quality_high_title">High Quality</string>
+    <string name="quality_high_subtitle">192 kbps • 44.1 kHz • Mono</string>
+    <string name="quality_high_description">Balanced clarity and fidelity, ideal for general recording and interviews.</string>
+    <string name="quality_maximum_short">Maximum</string>
+    <string name="quality_maximum_title">Maximum Quality</string>
+    <string name="quality_maximum_subtitle">256 kbps • 48 kHz • Mono</string>
+    <string name="quality_maximum_description">Studio-grade fidelity for lectures, acoustic audio, and detailed meetings.</string>
+    <string name="quality_bitrate_kbps">%1$d kbps</string>
+
+    <!-- Phase 33D-1: Library strings -->
+    <string name="library_cd_exit_selection">Exit selection</string>
+    <string name="library_cd_select_all">Select all</string>
+    <string name="library_cd_favorite_selected">Favorite selected</string>
+    <string name="library_cd_move_to_folder">Move to folder</string>
+    <string name="library_cd_delete_selected">Delete selected</string>
+    <string name="library_cd_back">Back</string>
+    <string name="library_error_title">Error Loading Library</string>
+    <string name="library_cd_back_to_folders">Back to folders</string>
+    <string name="library_cd_rename_folder">Rename folder</string>
+    <string name="library_cd_delete_folder">Delete folder</string>
+    <string name="library_folder_options">Folder options</string>
+    <string name="library_folder_open">Open</string>
+    <string name="library_cd_recording_options">Recording options</string>
+    <string name="library_cd_remove_missing">Remove missing record</string>
+    <string name="library_file_unavailable">File unavailable</string>
+    <string name="library_empty_favorites_title">No Favorites Yet</string>
+    <string name="library_empty_favorites_desc">Tap the star icon on any recording to add it to your favorites.</string>
+    <string name="library_empty_folder_title">Folder is Empty</string>
+    <string name="library_empty_folder_desc">Move recordings into this folder from their context menu.</string>
+    <string name="library_empty_title">No Recordings Yet</string>
+    <string name="library_empty_desc">Your voice memos and recorded audio will appear here ready to play and manage.</string>
+    <string name="library_folders_header">Folders (%1$d)</string>
+    <string name="library_tags_header">Tags (%1$d)</string>
+    <string name="library_tag_chip">%1$s (%2$d)</string>
+    <string name="library_tag_overflow">+%1$d</string>
+    <string name="library_meta_separator"> • </string>
+    <string name="playback_speed_chip">%1$s×</string>
+    <string name="library_delete_recording_message">Are you sure you want to delete \"%1$s\"? This action permanently deletes the audio file from your device.</string>
+    <plurals name="library_recording_count">
+        <item quantity="one">%1$d recording</item>
+        <item quantity="other">%1$d recordings</item>
+    </plurals>
+    <plurals name="library_selected_count">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <plurals name="library_bulk_delete_message">
+        <item quantity="one">Are you sure you want to delete %1$d recording? This action removes the selected audio file permanently.</item>
+        <item quantity="other">Are you sure you want to delete %1$d recordings? This action removes all selected audio files permanently.</item>
+    </plurals>
+
+    <!-- Phase 33D-1: Library dialog strings -->
+    <string name="library_dialog_add">Add</string>
+    <string name="library_dialog_no_tags">No tags created yet. Tap above to create one.</string>
+    <string name="library_cd_selected">Selected</string>
+    <string name="rename_error_empty">Name cannot be empty</string>
+    <string name="folder_error_blank">Folder name cannot be blank</string>
+    <string name="folder_error_max">Maximum 50 characters</string>
+    <string name="tag_error_blank">Tag name cannot be blank</string>
+    <string name="tag_error_max">Maximum 30 characters</string>
+
+    <!-- Phase 33D-1: Home screen strings -->
+    <string name="home_subtitle">Voice Recorder &amp; Audio Studio</string>
+    <string name="home_card_title">Studio Ready</string>
+    <string name="home_card_desc">Android 11+ High-Fidelity Audio Foundation</string>
+    <string name="a11y_playback_seek">Playback position</string>
+    <string name="a11y_seek_position">%1$s of %2$s</string>
+    <string name="a11y_loading_library">Loading audio library</string>
+    <string name="a11y_preparing_microphone">Preparing microphone</string>
 </resources>

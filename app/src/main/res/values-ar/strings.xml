@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Phase 33D-1: Arabic translations for strings introduced in this phase only.
+         Existing (pre-33D-1) keys intentionally remain in values/strings.xml; this file
+         does not represent complete Arabic localization of the app. -->
+
+    <!-- Record screen -->
+    <string name="record_permission_title">إذن الميكروفون مطلوب</string>
+    <string name="record_permission_message">يحتاج Recovo إلى إذن الميكروفون لتسجيل صوت عالي الدقة محليًا على جهازك.</string>
+    <string name="record_permission_grant">منح الإذن</string>
+    <string name="record_clear_title">مسح العنوان</string>
+    <string name="record_dismiss">تجاهل</string>
+    <string name="record_permission_settings_title">إعدادات الإذن</string>
+    <string name="record_permission_settings_message">تم رفض إذن الميكروفون بشكل دائم. يُرجى تمكين الوصول إلى الميكروفون من إعدادات التطبيق للسماح بالتسجيل.</string>
+    <string name="record_open_settings">فتح الإعدادات</string>
+    <string name="record_cd_interrupted">تمت مقاطعة التسجيل</string>
+    <string name="record_cd_paused">التسجيل متوقف مؤقتًا</string>
+    <string name="record_cd_saved">تم حفظ التسجيل</string>
+    <string name="record_cd_error">خطأ في التسجيل</string>
+    <string name="record_cd_microphone">الميكروفون</string>
+
+    <!-- Playback bar -->
+    <string name="playback_cd_dismiss_error">تجاهل الخطأ</string>
+    <string name="playback_cd_close_player">إغلاق المشغّل</string>
+    <string name="playback_cd_shuffle">تشغيل عشوائي</string>
+    <string name="playback_cd_previous">المقطع السابق</string>
+    <string name="playback_cd_rewind_10">الرجوع 10 ثوانٍ</string>
+    <string name="playback_cd_forward_10">التقديم 10 ثوانٍ</string>
+    <string name="playback_cd_next">المقطع التالي</string>
+    <string name="playback_cd_repeat_off">التكرار متوقف</string>
+    <string name="playback_cd_repeat_all">تكرار الكل</string>
+    <string name="playback_cd_repeat_one">تكرار واحد</string>
+    <string name="playback_cd_play">تشغيل</string>
+    <string name="playback_cd_pause">إيقاف مؤقت</string>
+    <string name="playback_hud_rewind">-10s</string>
+    <string name="playback_hud_forward">+10s</string>
+    <string name="playback_hud_fast_forward">تقديم سريع 2.0×</string>
+    <string name="playback_timer_remaining">متبقٍ %1$d د</string>
+    <string name="playback_timer_off">المؤقت: متوقف</string>
+
+    <!-- Recording quality (localized presentation layer) -->
+    <string name="quality_card_heading">إعداد جودة التسجيل</string>
+    <string name="quality_standard_short">قياسي</string>
+    <string name="quality_standard_title">جودة قياسية</string>
+    <string name="quality_standard_subtitle">96 كيلوبت/ث • 44.1 كيلوهرتز • أحادي</string>
+    <string name="quality_standard_description">مُحسَّنة للملاحظات الصوتية ووضوح الكلام وحجم الملف الصغير.</string>
+    <string name="quality_high_short">عالي</string>
+    <string name="quality_high_title">جودة عالية</string>
+    <string name="quality_high_subtitle">192 كيلوبت/ث • 44.1 كيلوهرتز • أحادي</string>
+    <string name="quality_high_description">وضوح ودقة متوازنان، مثالية للتسجيل العام والمقابلات.</string>
+    <string name="quality_maximum_short">أقصى</string>
+    <string name="quality_maximum_title">جودة قصوى</string>
+    <string name="quality_maximum_subtitle">256 كيلوبت/ث • 48 كيلوهرتز • أحادي</string>
+    <string name="quality_maximum_description">دقة بمستوى الاستوديو للمحاضرات والصوت الصوتي والاجتماعات المفصّلة.</string>
+    <string name="quality_bitrate_kbps">%1$d كيلوبت/ث</string>
+
+    <!-- Library -->
+    <string name="library_cd_exit_selection">الخروج من التحديد</string>
+    <string name="library_cd_select_all">تحديد الكل</string>
+    <string name="library_cd_favorite_selected">إضافة المحدد إلى المفضلة</string>
+    <string name="library_cd_move_to_folder">نقل إلى مجلد</string>
+    <string name="library_cd_delete_selected">حذف المحدد</string>
+    <string name="library_cd_back">رجوع</string>
+    <string name="library_error_title">خطأ في تحميل المكتبة</string>
+    <string name="library_cd_back_to_folders">رجوع إلى المجلدات</string>
+    <string name="library_cd_rename_folder">إعادة تسمية المجلد</string>
+    <string name="library_cd_delete_folder">حذف المجلد</string>
+    <string name="library_folder_options">خيارات المجلد</string>
+    <string name="library_folder_open">فتح</string>
+    <string name="library_cd_recording_options">خيارات التسجيل</string>
+    <string name="library_cd_remove_missing">إزالة التسجيل المفقود</string>
+    <string name="library_file_unavailable">الملف غير متاح</string>
+    <string name="library_empty_favorites_title">لا توجد مفضلات بعد</string>
+    <string name="library_empty_favorites_desc">اضغط على أيقونة النجمة في أي تسجيل لإضافته إلى المفضلة.</string>
+    <string name="library_empty_folder_title">المجلد فارغ</string>
+    <string name="library_empty_folder_desc">انقل التسجيلات إلى هذا المجلد من قائمة سياقها.</string>
+    <string name="library_empty_title">لا توجد تسجيلات بعد</string>
+    <string name="library_empty_desc">ستظهر مذكراتك الصوتية وتسجيلاتك الصوتية هنا جاهزة للتشغيل والإدارة.</string>
+    <string name="library_folders_header">المجلدات (%1$d)</string>
+    <string name="library_tags_header">الوسوم (%1$d)</string>
+    <string name="library_tag_chip">%1$s (%2$d)</string>
+    <string name="library_tag_overflow">+%1$d</string>
+    <string name="library_meta_separator"> • </string>
+    <string name="playback_speed_chip">%1$s×</string>
+    <string name="library_delete_recording_message">هل أنت متأكد من حذف \"%1$s\"؟ سيؤدي هذا الإجراء إلى حذف الملف الصوتي نهائيًا من جهازك.</string>
+    <plurals name="library_recording_count">
+        <item quantity="zero">%1$d تسجيل</item>
+        <item quantity="one">%1$d تسجيل</item>
+        <item quantity="two">%1$d تسجيلان</item>
+        <item quantity="few">%1$d تسجيلات</item>
+        <item quantity="many">%1$d تسجيلًا</item>
+        <item quantity="other">%1$d تسجيل</item>
+    </plurals>
+    <plurals name="library_selected_count">
+        <item quantity="zero">تم تحديد %1$d</item>
+        <item quantity="one">تم تحديد %1$d</item>
+        <item quantity="two">تم تحديد %1$d</item>
+        <item quantity="few">تم تحديد %1$d</item>
+        <item quantity="many">تم تحديد %1$d</item>
+        <item quantity="other">تم تحديد %1$d</item>
+    </plurals>
+    <plurals name="library_bulk_delete_message">
+        <item quantity="zero">هل أنت متأكد من حذف %1$d تسجيل؟ سيؤدي هذا الإجراء إلى إزالة ملف التسجيل المحدد نهائيًا.</item>
+        <item quantity="one">هل أنت متأكد من حذف %1$d تسجيل؟ سيؤدي هذا الإجراء إلى إزالة ملف التسجيل المحدد نهائيًا.</item>
+        <item quantity="two">هل أنت متأكد من حذف %1$d تسجيل؟ سيؤدي هذا الإجراء إلى إزالة ملف التسجيل المحدد نهائيًا.</item>
+        <item quantity="few">هل أنت متأكد من حذف %1$d تسجيلات؟ سيؤدي هذا الإجراء إلى إزالة ملفات التسجيل المحددة نهائيًا.</item>
+        <item quantity="many">هل أنت متأكد من حذف %1$d تسجيلًا؟ سيؤدي هذا الإجراء إلى إزالة ملفات التسجيل المحددة نهائيًا.</item>
+        <item quantity="other">هل أنت متأكد من حذف %1$d تسجيل؟ سيؤدي هذا الإجراء إلى إزالة ملفات التسجيل المحددة نهائيًا.</item>
+    </plurals>
+
+    <!-- Library dialogs -->
+    <string name="library_dialog_add">إضافة</string>
+    <string name="library_dialog_no_tags">لم يتم إنشاء وسوم بعد. اضغط في الأعلى لإنشاء وسم.</string>
+    <string name="library_cd_selected">محدد</string>
+    <string name="rename_error_empty">لا يمكن أن يكون الاسم فارغًا</string>
+    <string name="folder_error_blank">لا يمكن أن يكون اسم المجلد فارغًا</string>
+    <string name="folder_error_max">الحد الأقصى 50 حرفًا</string>
+    <string name="tag_error_blank">لا يمكن أن يكون اسم الوسم فارغًا</string>
+    <string name="tag_error_max">الحد الأقصى 30 حرفًا</string>
+
+    <!-- Home screen -->
+    <string name="home_subtitle">مسجّل صوتي واستوديو صوتي</string>
+    <string name="home_card_title">الاستوديو جاهز</string>
+    <string name="home_card_desc">أساس صوت عالي الدقة لأندرويد 11+</string>
+    <string name="a11y_playback_seek">موضع التشغيل</string>
+    <string name="a11y_seek_position">%1$s من %2$s</string>
+    <string name="a11y_loading_library">جارٍ تحميل مكتبة الصوت</string>
+    <string name="a11y_preparing_microphone">جارٍ تحضير الميكروفون</string>
+
+    <!-- Pre-existing keys translated so the ar locale does not trip the MissingTranslation lint gate. -->
+    <string name="app_name">Recovo</string>
+    <string name="library_title">مكتبة الصوت</string>
+    <string name="tab_all">الكل</string>
+    <string name="tab_favorites">المفضلة</string>
+    <string name="tab_folders">المجلدات</string>
+    <string name="tab_tags">الوسوم</string>
+    <string name="search_recordings_hint">ابحث في التسجيلات والمجلدات والوسوم…</string>
+    <string name="clear_search">مسح البحث</string>
+    <string name="no_recordings_found">لا توجد تسجيلات</string>
+    <string name="no_recordings_found_desc">لا توجد تسجيلات تطابق استعلام البحث أو التصفية.</string>
+    <string name="clear_filter">مسح التصفية</string>
+    <string name="sort_by">ترتيب حسب</string>
+    <string name="sort_newest">الأحدث أولًا</string>
+    <string name="sort_oldest">الأقدم أولًا</string>
+    <string name="sort_name_az">الاسم (أ–ي)</string>
+    <string name="sort_name_za">الاسم (ي–أ)</string>
+    <string name="sort_duration">المدة</string>
+    <string name="sort_size">حجم الملف</string>
+    <string name="folders_title">المجلدات</string>
+    <string name="new_folder">مجلد جديد</string>
+    <string name="create_folder">إنشاء مجلد</string>
+    <string name="rename_folder">إعادة تسمية المجلد</string>
+    <string name="delete_folder">حذف المجلد</string>
+    <string name="folder_name_hint">اسم المجلد</string>
+    <string name="delete_folder_message">هل أنت متأكد من حذف هذا المجلد؟ لن يتم حذف التسجيلات الموجودة بداخله.</string>
+    <string name="no_folders">لم يتم إنشاء مجلدات</string>
+    <string name="no_folders_desc">أنشئ مجلدات لتصنيف تسجيلاتك وتنظيمها.</string>
+    <string name="move_to_folder">نقل إلى مجلد</string>
+    <string name="none_folder">بلا (بدون مجلد)</string>
+    <string name="tags_title">الوسوم</string>
+    <string name="new_tag">وسم جديد</string>
+    <string name="create_tag">إنشاء وسم</string>
+    <string name="rename_tag">إعادة تسمية الوسم</string>
+    <string name="delete_tag">حذف الوسم</string>
+    <string name="tag_name_hint">اسم الوسم</string>
+    <string name="delete_tag_message">هل أنت متأكد من حذف هذا الوسم؟ لن يتم حذف التسجيلات.</string>
+    <string name="no_tags">لم يتم إنشاء وسوم</string>
+    <string name="no_tags_desc">أنشئ وسومًا لتصنيف التسجيلات المرتبطة والعثور عليها بسرعة.</string>
+    <string name="manage_tags">إدارة الوسوم</string>
+    <string name="rename_recording">إعادة تسمية التسجيل</string>
+    <string name="recording_name_hint">اسم التسجيل</string>
+    <string name="favorite">إضافة إلى المفضلة</string>
+    <string name="unfavorite">إزالة من المفضلة</string>
+    <string name="delete_recording_title">حذف التسجيل</string>
+    <string name="delete_selected_title">حذف المحدد</string>
+    <string name="cancel">إلغاء</string>
+    <string name="save">حفظ</string>
+    <string name="delete">حذف</string>
+    <string name="select_all">تحديد الكل</string>
+    <string name="deselect_all">إلغاء تحديد الكل</string>
+    <string name="recording_quality_title">جودة التسجيل</string>
+    <string name="recording_quality_standard">قياسي</string>
+    <string name="recording_quality_high">عالٍ</string>
+    <string name="recording_quality_maximum">أقصى</string>
+    <string name="recording_discard_title">تجاهل التسجيل؟</string>
+    <string name="recording_discard_message">هل أنت متأكد من تجاهل هذا التسجيل؟ سيتم حذف الملف الصوتي المسجّل نهائيًا.</string>
+    <string name="discard">تجاهل</string>
+    <string name="keep_recording">الاحتفاظ بالتسجيل</string>
+    <string name="interruption_paused_title">التسجيل متوقف مؤقتًا (مكالمة / مقاطعة)</string>
+    <string name="interruption_paused_desc">تم إيقاف التسجيل مؤقتًا تلقائيًا بسبب تطبيق صوتي آخر أو مكالمة واردة. اضغط على استئناف للمتابعة.</string>
+    <string name="recording_title_optional">عنوان التسجيل (اختياري)</string>
+    <string name="recording_title_hint">مثال: ملاحظة اجتماع</string>
+    <string name="state_idle">جاهز للتسجيل</string>
+    <string name="state_preparing">تحضير الميكروفون…</string>
+    <string name="state_recording">جارٍ التسجيل</string>
+    <string name="state_paused">متوقف مؤقتًا</string>
+    <string name="state_interrupted">متوقف مؤقتًا (مقاطعة)</string>
+    <string name="state_stopping">حفظ التسجيل…</string>
+    <string name="state_saved">تم الحفظ بنجاح</string>
+    <string name="state_error">خطأ في التسجيل</string>
+    <string name="start_recording">بدء التسجيل</string>
+    <string name="pause_recording">إيقاف مؤقت</string>
+    <string name="resume_recording">استئناف</string>
+    <string name="stop_and_save">حفظ</string>
+    <string name="cancel_recording">إلغاء</string>
+    <string name="recording_saved_title">تم حفظ التسجيل</string>
+    <string name="record_another">تسجيل آخر</string>
+    <string name="audio_level_meter">مستوى الإدخال</string>
+    <string name="back_dialog_title">التسجيل قيد التقدم</string>
+    <string name="back_dialog_message">يوجد تسجيل قيد التشغيل حاليًا. هل تريد الحفظ والخروج، أم متابعة التسجيل في الخلفية؟</string>
+    <string name="back_dialog_save">حفظ وخروج</string>
+    <string name="back_dialog_continue">المتابعة في الخلفية</string>
+    <string name="back_dialog_dismiss">البقاء في الشاشة</string>
+</resources>

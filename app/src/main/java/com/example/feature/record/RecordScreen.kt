@@ -76,7 +76,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -85,6 +87,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.R
+import com.example.core.designsystem.components.RecovoStatusCard
 import com.example.core.designsystem.theme.RecovoDimensions
 import com.example.core.designsystem.theme.RecovoSpacing
 import com.example.core.engine.RecordingState
@@ -181,40 +184,26 @@ fun RecordScreen(
             ) {
                 // Permission Warning Card
                 if (!hasMicPermission) {
-                    Card(
+                    RecovoStatusCard(
+                        title = stringResource(R.string.record_permission_title),
+                        body = stringResource(R.string.record_permission_message),
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = RecovoSpacing.medium)
                             .testTag("record_permission_card"),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(RecovoSpacing.medium),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = "Microphone Permission Required",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(RecovoSpacing.small))
-                            Text(
-                                text = "Recovo requires microphone access to record high-fidelity audio locally on your device.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                            Spacer(modifier = Modifier.height(RecovoSpacing.medium))
+                        titleToBodySpacing = RecovoSpacing.small,
+                        bodyToActionSpacing = RecovoSpacing.medium,
+                        action = {
                             Button(
                                 onClick = { micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                             ) {
-                                Text("Grant Permission")
+                                Text(stringResource(R.string.record_permission_grant))
                             }
-                        }
-                    }
+                        },
+                    )
                 }
 
                 // Audio Interruption Notice Banner
@@ -281,7 +270,7 @@ fun RecordScreen(
                         trailingIcon = {
                             if (customTitle.isNotEmpty()) {
                                 IconButton(onClick = { customTitle = "" }) {
-                                    Icon(Icons.Default.Close, contentDescription = "Clear Title")
+                                    Icon(Icons.Default.Close, contentDescription = stringResource(R.string.record_clear_title))
                                 }
                             }
                         }
@@ -355,84 +344,37 @@ fun RecordScreen(
                 if (state is RecordingState.Saved) {
                     val savedState = state as RecordingState.Saved
                     Spacer(modifier = Modifier.height(RecovoSpacing.medium))
-                    Card(
+                    RecovoStatusCard(
+                        title = stringResource(R.string.recording_saved_title),
+                        body = savedState.file.name,
+                        icon = Icons.Default.CheckCircle,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(RecovoSpacing.medium),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                Spacer(modifier = Modifier.width(RecovoSpacing.small))
-                                Text(
-                                    text = stringResource(R.string.recording_saved_title),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = savedState.file.name,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                    }
+                    )
                 }
 
                 // Error State Feedback
                 if (state is RecordingState.Error) {
                     val errorState = state as RecordingState.Error
                     Spacer(modifier = Modifier.height(RecovoSpacing.medium))
-                    Card(
+                    RecovoStatusCard(
+                        title = stringResource(R.string.state_error),
+                        body = errorState.message,
+                        icon = Icons.Default.ErrorOutline,
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(RecovoSpacing.medium),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.ErrorOutline,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                                Spacer(modifier = Modifier.width(RecovoSpacing.small))
-                                Text(
-                                    text = stringResource(R.string.state_error),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = errorState.message,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                            Spacer(modifier = Modifier.height(RecovoSpacing.small))
+                        action = {
                             OutlinedButton(
                                 onClick = { viewModel.resetState() }
                             ) {
                                 Icon(imageVector = Icons.Default.Refresh, contentDescription = null)
                                 Spacer(modifier = Modifier.width(RecovoSpacing.extraSmall))
-                                Text("Dismiss")
+                                Text(stringResource(R.string.record_dismiss))
                             }
-                        }
-                    }
+                        },
+                    )
                 }
             }
 
@@ -649,8 +591,8 @@ fun RecordScreen(
     if (showPermissionRationale) {
         AlertDialog(
             onDismissRequest = { showPermissionRationale = false },
-            title = { Text("Permission Settings") },
-            text = { Text("Microphone permission was permanently denied. Please enable microphone access in App Settings to allow recording.") },
+            title = { Text(stringResource(R.string.record_permission_settings_title)) },
+            text = { Text(stringResource(R.string.record_permission_settings_message)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -660,12 +602,12 @@ fun RecordScreen(
                 ) {
                     Icon(imageVector = Icons.Default.Settings, contentDescription = null)
                     Spacer(modifier = Modifier.width(RecovoSpacing.extraSmall))
-                    Text("Open Settings")
+                    Text(stringResource(R.string.record_open_settings))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showPermissionRationale = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -718,21 +660,28 @@ private fun StudioStatusHub(
     state: RecordingState,
     modifier: Modifier = Modifier
 ) {
+    val preparingCd = stringResource(R.string.a11y_preparing_microphone)
+    val stoppingCd = stringResource(R.string.state_stopping)
+    // Semantic state surfaces use real M3 container roles (no ad-hoc alpha overlays):
+    // recording -> errorContainer (red, distinct from the amber brand),
+    // paused/interrupted -> tertiaryContainer (slate, distinct from both),
+    // preparing/stopping -> primaryContainer (amber), saved -> primaryContainer,
+    // error -> errorContainer, idle -> surfaceVariant.
     val containerColor = when (state) {
-        is RecordingState.Recording -> MaterialTheme.colorScheme.error.copy(alpha = 0.12f)
-        is RecordingState.Paused -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
-        is RecordingState.Preparing, is RecordingState.Stopping -> MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
-        is RecordingState.Saved -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-        is RecordingState.Error -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+        is RecordingState.Recording -> MaterialTheme.colorScheme.errorContainer
+        is RecordingState.Paused -> MaterialTheme.colorScheme.tertiaryContainer
+        is RecordingState.Preparing, is RecordingState.Stopping -> MaterialTheme.colorScheme.primaryContainer
+        is RecordingState.Saved -> MaterialTheme.colorScheme.primaryContainer
+        is RecordingState.Error -> MaterialTheme.colorScheme.errorContainer
         is RecordingState.Idle -> MaterialTheme.colorScheme.surfaceVariant
     }
 
     val iconColor = when (state) {
-        is RecordingState.Recording -> MaterialTheme.colorScheme.error
-        is RecordingState.Paused -> MaterialTheme.colorScheme.tertiary
-        is RecordingState.Preparing, is RecordingState.Stopping -> MaterialTheme.colorScheme.primary
+        is RecordingState.Recording -> MaterialTheme.colorScheme.onErrorContainer
+        is RecordingState.Paused -> MaterialTheme.colorScheme.onTertiaryContainer
+        is RecordingState.Preparing, is RecordingState.Stopping -> MaterialTheme.colorScheme.onPrimaryContainer
         is RecordingState.Saved -> MaterialTheme.colorScheme.onPrimaryContainer
-        is RecordingState.Error -> MaterialTheme.colorScheme.error
+        is RecordingState.Error -> MaterialTheme.colorScheme.onErrorContainer
         is RecordingState.Idle -> MaterialTheme.colorScheme.primary
     }
 
@@ -746,14 +695,18 @@ private fun StudioStatusHub(
         when (state) {
             is RecordingState.Preparing -> {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(44.dp),
+                    modifier = Modifier
+                        .size(44.dp)
+                        .semantics { contentDescription = preparingCd },
                     color = iconColor,
                     strokeWidth = 3.dp
                 )
             }
             is RecordingState.Stopping -> {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(44.dp),
+                    modifier = Modifier
+                        .size(44.dp)
+                        .semantics { contentDescription = stoppingCd },
                     color = iconColor,
                     strokeWidth = 3.dp
                 )
@@ -762,14 +715,14 @@ private fun StudioStatusHub(
                 if (state.isInterrupted) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.PhoneCallback,
-                        contentDescription = "Recording interrupted",
+                        contentDescription = stringResource(R.string.record_cd_interrupted),
                         tint = iconColor,
                         modifier = Modifier.size(44.dp)
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Default.Pause,
-                        contentDescription = "Recording paused",
+                        contentDescription = stringResource(R.string.record_cd_paused),
                         tint = iconColor,
                         modifier = Modifier.size(44.dp)
                     )
@@ -778,7 +731,7 @@ private fun StudioStatusHub(
             is RecordingState.Saved -> {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Recording saved",
+                    contentDescription = stringResource(R.string.record_cd_saved),
                     tint = iconColor,
                     modifier = Modifier.size(44.dp)
                 )
@@ -786,7 +739,7 @@ private fun StudioStatusHub(
             is RecordingState.Error -> {
                 Icon(
                     imageVector = Icons.Default.ErrorOutline,
-                    contentDescription = "Recording error",
+                    contentDescription = stringResource(R.string.record_cd_error),
                     tint = iconColor,
                     modifier = Modifier.size(44.dp)
                 )
@@ -794,7 +747,7 @@ private fun StudioStatusHub(
             else -> {
                 Icon(
                     imageVector = Icons.Default.Mic,
-                    contentDescription = "Microphone",
+                    contentDescription = stringResource(R.string.record_cd_microphone),
                     tint = iconColor,
                     modifier = Modifier.size(44.dp)
                 )
@@ -802,6 +755,9 @@ private fun StudioStatusHub(
         }
     }
 }
+
+/** Four-tuple keeping label, icon and both colors aligned in [RecordingStateBadge]. */
+private data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
 /**
  * Text badge communicating the exact state using icon + text so state is never conveyed by color alone.
@@ -811,56 +767,69 @@ private fun RecordingStateBadge(
     state: RecordingState,
     modifier: Modifier = Modifier
 ) {
-    val (label, icon, color) = when (state) {
-        is RecordingState.Idle -> Triple(
+    // Badge carries icon + text, so state is never color-only. Each entry pairs a
+    // foreground "on*" role with its semantic container so contrast holds in both themes.
+    val (label, icon, fgColor, bgColor) = when (state) {
+        is RecordingState.Idle -> Quad(
             stringResource(R.string.state_idle),
             Icons.Default.Mic,
-            MaterialTheme.colorScheme.onSurfaceVariant
+            MaterialTheme.colorScheme.onSurfaceVariant,
+            MaterialTheme.colorScheme.surfaceVariant
         )
-        is RecordingState.Preparing -> Triple(
+        is RecordingState.Preparing -> Quad(
             stringResource(R.string.state_preparing),
             Icons.Default.HourglassTop,
-            MaterialTheme.colorScheme.primary
+            MaterialTheme.colorScheme.onPrimaryContainer,
+            MaterialTheme.colorScheme.primaryContainer
         )
-        is RecordingState.Recording -> Triple(
+        is RecordingState.Recording -> Quad(
             stringResource(R.string.state_recording),
             Icons.Default.Mic,
-            MaterialTheme.colorScheme.error
+            MaterialTheme.colorScheme.onErrorContainer,
+            MaterialTheme.colorScheme.errorContainer
         )
         is RecordingState.Paused -> if (state.isInterrupted) {
-            Triple(
+            Quad(
                 stringResource(R.string.state_interrupted),
                 Icons.Default.Warning,
-                MaterialTheme.colorScheme.tertiary
+                MaterialTheme.colorScheme.onTertiaryContainer,
+                MaterialTheme.colorScheme.tertiaryContainer
             )
         } else {
-            Triple(
+            Quad(
                 stringResource(R.string.state_paused),
                 Icons.Default.Pause,
-                MaterialTheme.colorScheme.tertiary
+                MaterialTheme.colorScheme.onTertiaryContainer,
+                MaterialTheme.colorScheme.tertiaryContainer
             )
         }
-        is RecordingState.Stopping -> Triple(
+        is RecordingState.Stopping -> Quad(
             stringResource(R.string.state_stopping),
             Icons.Default.HourglassTop,
-            MaterialTheme.colorScheme.primary
+            MaterialTheme.colorScheme.onPrimaryContainer,
+            MaterialTheme.colorScheme.primaryContainer
         )
-        is RecordingState.Saved -> Triple(
+        is RecordingState.Saved -> Quad(
             stringResource(R.string.state_saved),
             Icons.Default.CheckCircle,
-            MaterialTheme.colorScheme.primary
+            MaterialTheme.colorScheme.onPrimaryContainer,
+            MaterialTheme.colorScheme.primaryContainer
         )
-        is RecordingState.Error -> Triple(
+        is RecordingState.Error -> Quad(
             stringResource(R.string.state_error),
             Icons.Default.ErrorOutline,
-            MaterialTheme.colorScheme.error
+            MaterialTheme.colorScheme.onErrorContainer,
+            MaterialTheme.colorScheme.errorContainer
         )
     }
 
     Surface(
-        modifier = modifier.semantics { contentDescription = label },
+        modifier = modifier.semantics {
+            contentDescription = label
+            liveRegion = LiveRegionMode.Polite
+        },
         shape = RoundedCornerShape(12.dp),
-        color = color.copy(alpha = 0.12f)
+        color = bgColor
     ) {
         Row(
             modifier = Modifier.padding(horizontal = RecovoSpacing.small, vertical = 4.dp),
@@ -869,7 +838,7 @@ private fun RecordingStateBadge(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = color,
+                tint = fgColor,
                 modifier = Modifier.size(14.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
@@ -877,7 +846,7 @@ private fun RecordingStateBadge(
                 text = label.uppercase(Locale.US),
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                color = color
+                color = fgColor
             )
         }
     }
