@@ -211,4 +211,36 @@
     <string name="back_dialog_save">حفظ وخروج</string>
     <string name="back_dialog_continue">المتابعة في الخلفية</string>
     <string name="back_dialog_dismiss">البقاء في الشاشة</string>
+
+    <!-- Phase 34-1: deletion-result feedback -->
+    <string name="library_delete_failed_single_message">تعذّر حذف \"%1$s\". لم يتمكن التطبيق من إزالة الملف الصوتي من مساحة التخزين.</string>
+    <plurals name="library_bulk_delete_failed_message">
+        <item quantity="zero">تعذّر حذف %1$d من %2$d تسجيل.</item>
+        <item quantity="one">تعذّر حذف %1$d من %2$d تسجيل.</item>
+        <item quantity="two">تعذّر حذف %1$d من %2$d تسجيلين.</item>
+        <item quantity="few">تعذّر حذف %1$d من %2$d تسجيلات.</item>
+        <item quantity="many">تعذّر حذف %1$d من %2$d تسجيلًا.</item>
+        <item quantity="other">تعذّر حذف %1$d من %2$d تسجيل.</item>
+    </plurals>
+
+    <!-- Phase 34-3: recording visualizer labels -->
+    <string name="visualizer_input_level_db">مستوى الإدخال: %1$d ديسيبل</string>
+    <string name="visualizer_input_paused">الإدخال متوقف مؤقتًا</string>
+    <string name="visualizer_input_standby">الإدخال في وضع الاستعداد</string>
+    <string name="visualizer_estimated_size">الحجم التقديري: ~%1$s • %2$d كيلوبت/ث</string>
+
+    <!-- Phase 34-3: recording / playback notification text -->
+    <string name="notification_recording_starting">جارٍ التسجيل…</string>
+    <string name="notification_recording_active">التسجيل</string>
+    <string name="notification_recording_paused">متوقف مؤقتًا</string>
+    <string name="notification_recording_content_title">Recovo — %1$s</string>
+    <string name="notification_recording_channel_name">تسجيل Recovo</string>
+    <string name="notification_recording_channel_desc">يعرض حالة التسجيل النشط وعناصر التحكم</string>
+    <string name="notification_playback_channel_name">تشغيل الصوت</string>
+    <string name="notification_playback_channel_desc">يعرض عناصر التحكم في التشغيل النشط ومعلومات الصوت</string>
+    <string name="playback_notification_previous">السابق</string>
+    <string name="playback_notification_next">التالي</string>
+    <string name="playback_notification_stop">إيقاف</string>
+    <string name="playback_notification_default_title">صوت Recovo</string>
+    <string name="playback_notification_content_text">استوديو Recovo الصوتي</string>
 </resources>

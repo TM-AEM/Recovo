@@ -207,4 +207,32 @@
     <string name="a11y_seek_position">%1$s of %2$s</string>
     <string name="a11y_loading_library">Loading audio library</string>
     <string name="a11y_preparing_microphone">Preparing microphone</string>
+
+    <!-- Phase 34-1: deletion-result feedback -->
+    <string name="library_delete_failed_single_message">Couldn\'t delete \"%1$s\". The audio file could not be removed from storage.</string>
+    <plurals name="library_bulk_delete_failed_message">
+        <item quantity="one">%1$d of %2$d recordings could not be deleted.</item>
+        <item quantity="other">%1$d of %2$d recordings could not be deleted.</item>
+    </plurals>
+
+    <!-- Phase 34-3: recording visualizer labels -->
+    <string name="visualizer_input_level_db">Input Level: %1$d dB</string>
+    <string name="visualizer_input_paused">Input Paused</string>
+    <string name="visualizer_input_standby">Input Standby</string>
+    <string name="visualizer_estimated_size">Est. Size: ~%1$s • %2$d kbps</string>
+
+    <!-- Phase 34-3: recording / playback notification text -->
+    <string name="notification_recording_starting">Recording…</string>
+    <string name="notification_recording_active">Recording</string>
+    <string name="notification_recording_paused">Paused</string>
+    <string name="notification_recording_content_title">Recovo — %1$s</string>
+    <string name="notification_recording_channel_name">Recovo Recording</string>
+    <string name="notification_recording_channel_desc">Shows active recording status and controls</string>
+    <string name="notification_playback_channel_name">Audio Playback</string>
+    <string name="notification_playback_channel_desc">Shows active playback controls and audio info</string>
+    <string name="playback_notification_previous">Previous</string>
+    <string name="playback_notification_next">Next</string>
+    <string name="playback_notification_stop">Stop</string>
+    <string name="playback_notification_default_title">Recovo Audio</string>
+    <string name="playback_notification_content_text">Recovo Audio Studio</string>
 </resources>

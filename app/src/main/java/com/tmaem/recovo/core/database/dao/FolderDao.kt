@@ -1,0 +1,38 @@
+package com.tmaem.recovo.core.database.dao
+
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
+import com.tmaem.recovo.core.database.model.FolderEntity
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface FolderDao {
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(folder: FolderEntity): Long
+
+    @Update
+    suspend fun update(folder: FolderEntity)
+
+    @Delete
+    suspend fun delete(folder: FolderEntity)
+
+    @Query("DELETE FROM folders WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("SELECT * FROM folders ORDER BY name COLLATE NOCASE ASC")
+    fun observeAllFolders(): Flow<List<FolderEntity>>
+
+    @Query("SELECT * FROM folders WHERE id = :id")
+    suspend fun getById(id: Long): FolderEntity?
+
+    @Query("SELECT * FROM folders WHERE name = :name COLLATE NOCASE LIMIT 1")
+    suspend fun getFolderByName(name: String): FolderEntity?
+
+    @Query("UPDATE folders SET name = :name, modifiedAt = :modifiedAt WHERE id = :id")
+    suspend fun renameFolder(id: Long, name: String, modifiedAt: Long)
+}

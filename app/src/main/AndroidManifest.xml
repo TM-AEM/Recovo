@@ -33,13 +33,13 @@
         </activity>
 
         <service
-            android:name="com.example.core.service.RecordingService"
+            android:name="com.tmaem.recovo.core.service.RecordingService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
         <service
-            android:name="com.example.core.service.PlaybackService"
+            android:name="com.tmaem.recovo.core.service.PlaybackService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
