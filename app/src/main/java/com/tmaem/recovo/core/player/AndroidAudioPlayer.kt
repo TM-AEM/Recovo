@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.io.File
 
 /**
@@ -35,7 +36,8 @@ import java.io.File
  */
 class AndroidAudioPlayer(
     context: Context,
-    private val coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+    private var positionSaver: PlaybackPositionSaver? = null
 ) : AudioPlayer {
 
     private val appContext = context.applicationContext
@@ -45,6 +47,11 @@ class AndroidAudioPlayer(
     private var mediaSession: MediaSession? = null
     private var tickerJob: Job? = null
     private var sleepTimerJob: Job? = null
+    private var checkpointJob: Job? = null
+
+    /** Test seam: overrides the position saver when set. */
+    internal var positionSaveOverride: ((Long, Long?) -> Unit)? = null
+
     private var audioFocusRequest: AudioFocusRequest? = null
 
     private var isDucked = false
@@ -148,6 +155,95 @@ class AndroidAudioPlayer(
 
     fun getSessionToken(): MediaSession.Token? = mediaSession?.sessionToken
 
+    /**
+     * Binds the resume-position sink. Called by [AudioPlayerProvider] at application start-up.
+     */
+    fun setPositionSaver(saver: PlaybackPositionSaver?) {
+        positionSaver = saver
+    }
+
+    /**
+     * Saves [positionMs] (already normalized) for [recordingId].
+     *
+     * The save is keyed by the stable recording id captured at the call site, so an outgoing
+     * track's checkpoint or teardown save can never be recorded against a different recording.
+     */
+    private fun savePosition(recordingId: Long, positionMs: Long?) {
+        val override = positionSaveOverride
+        if (override != null) {
+            override(recordingId, positionMs)
+            return
+        }
+        val saver = positionSaver ?: return
+        coroutineScope.launch {
+            try {
+                saver.save(recordingId, positionMs)
+            } catch (ignored: Exception) {
+            }
+        }
+    }
+
+    /** Best-effort blocking save used when a coroutine scope may be torn down (service destroy). */
+    internal fun persistPositionBlocking(recordingId: Long, positionMs: Long?) {
+        val override = positionSaveOverride
+        if (override != null) {
+            override(recordingId, positionMs)
+            return
+        }
+        val saver = positionSaver ?: return
+        runBlocking {
+            try {
+                saver.save(recordingId, positionMs)
+            } catch (ignored: Exception) {
+            }
+        }
+    }
+
+    /**
+     * Best-effort blocking save of the currently loaded recording, for teardown paths where the
+     * process may be going away. This is a safety net, not a guarantee: a process killed without
+     * warning never runs it, which is why the periodic checkpoint and event-driven saves exist.
+     */
+    internal fun persistCurrentPositionBlocking() {
+        val id = _playbackState.value.currentRecording?.id ?: return
+        persistPositionBlocking(id, currentSavablePosition())
+    }
+
+    private fun startCheckpointing() {
+        checkpointJob?.cancel()
+        if (positionSaver == null && positionSaveOverride == null) return
+        checkpointJob = coroutineScope.launch {
+            while (isActive) {
+                delay(ResumePositionPolicy.CHECKPOINT_INTERVAL_MS)
+                checkpointCurrentPosition()
+            }
+        }
+    }
+
+    private fun stopCheckpointing() {
+        checkpointJob?.cancel()
+        checkpointJob = null
+    }
+
+    /** Takes the latest in-memory position and persists it under the current recording's id. */
+    private fun checkpointCurrentPosition() {
+        val current = _playbackState.value
+        val id = current.currentRecording?.id ?: return
+        savePosition(id, ResumePositionPolicy.normalizeForSave(current.currentPositionMs, current.durationMs))
+    }
+
+    /** Latest in-memory position normalized for persistence, or null when it is not resumable. */
+    private fun currentSavablePosition(): Long? {
+        val state = _playbackState.value
+        return ResumePositionPolicy.normalizeForSave(state.currentPositionMs, state.durationMs)
+    }
+
+    /** Saves the currently loaded recording's position against its own stable id, if any. */
+    private fun saveOutgoingPosition() {
+        val id = _playbackState.value.currentRecording?.id ?: return
+        savePosition(id, currentSavablePosition())
+    }
+
     @Synchronized
     override fun setPlaylist(recordings: List<RecordingEntity>) {
         originalPlaylist = recordings
@@ -224,6 +320,11 @@ class AndroidAudioPlayer(
             activePlaylist = listOf(recording)
         }
 
+        // Persist the outgoing track's position against its own stable id before it is torn down,
+        // so switching tracks never loses or cross-assigns the previous resuming point.
+        saveOutgoingPosition()
+        // A brand-new preparation resets the in-memory position; the previous recording's position
+        // is never inherited by the incoming one.
         stopInternal()
         if (!requestAudioFocus()) {
             _playbackState.value = _playbackState.value.copy(
@@ -253,16 +354,31 @@ class AndroidAudioPlayer(
                         .build()
                 )
                 setDataSource(file.absolutePath)
-                setOnPreparedListener { mp ->
+                // Restore a persisted resume position only once the player is prepared and the
+                // duration is known. The seek is applied inside the prepared listener, then playback
+                // starts from that position; a null/stale saved value keeps the start-at-zero behavior.
+                val onPrepared = MediaPlayer.OnPreparedListener { mp ->
                     synchronized(this@AndroidAudioPlayer) {
                         if (mediaPlayer !== mp) {
-                            return@setOnPreparedListener
+                            return@OnPreparedListener
                         }
                         val actualDuration = if (mp.duration > 0) mp.duration.toLong() else recording.durationMs
+                        val restoreTarget = ResumePositionPolicy.restoreTarget(recording.resumePositionMs, actualDuration)
+                        val startPosition = restoreTarget ?: 0L
+                        if (restoreTarget != null) {
+                            try {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    mp.seekTo(restoreTarget, MediaPlayer.SEEK_CLOSEST)
+                                } else {
+                                    mp.seekTo(restoreTarget.toInt())
+                                }
+                            } catch (ignored: Exception) {
+                            }
+                        }
                         _playbackState.value = _playbackState.value.copy(
                             currentRecording = recording,
                             isPlaying = true,
-                            currentPositionMs = 0L,
+                            currentPositionMs = startPosition,
                             durationMs = actualDuration,
                             isPrepared = true,
                             errorMessage = null
@@ -272,11 +388,12 @@ class AndroidAudioPlayer(
                         applySpeedToPlayer(mp, _playbackState.value.playbackSpeed)
 
                         updateMediaSessionMetadata(recording, actualDuration)
-                        updateMediaSessionState(FrameworkPlaybackState.STATE_PLAYING, 0L)
+                        updateMediaSessionState(FrameworkPlaybackState.STATE_PLAYING, startPosition)
 
                         try {
                             mp.start()
                             startTicker()
+                            startCheckpointing()
                         } catch (e: Exception) {
                             stopInternal()
                             _playbackState.value = _playbackState.value.copy(
@@ -288,6 +405,7 @@ class AndroidAudioPlayer(
                         }
                     }
                 }
+                setOnPreparedListener(onPrepared)
                 setOnCompletionListener { mp ->
                     synchronized(this@AndroidAudioPlayer) {
                         if (mediaPlayer !== mp) {
@@ -341,6 +459,8 @@ class AndroidAudioPlayer(
     private fun handlePlaybackCompletion() {
         when (_playbackState.value.repeatMode) {
             RepeatMode.ONE -> {
+                // Repeat One replays from zero; clear any saved resume point so the loop is clean.
+                val id = _playbackState.value.currentRecording?.id
                 try {
                     mediaPlayer?.seekTo(0)
                     mediaPlayer?.start()
@@ -350,6 +470,7 @@ class AndroidAudioPlayer(
                         currentPositionMs = 0L
                     )
                     updateMediaSessionState(FrameworkPlaybackState.STATE_PLAYING, 0L)
+                    id?.let { savePosition(it, null) }
                 } catch (e: Exception) {
                     playNext()
                 }
@@ -365,6 +486,7 @@ class AndroidAudioPlayer(
                     play(list[index + 1])
                 } else {
                     stopTicker()
+                    stopCheckpointing()
                     abandonAudioFocus()
                     val dur = _playbackState.value.durationMs
                     _playbackState.value = _playbackState.value.copy(
@@ -372,6 +494,9 @@ class AndroidAudioPlayer(
                         currentPositionMs = dur
                     )
                     updateMediaSessionState(FrameworkPlaybackState.STATE_PAUSED, dur)
+                    // Completed at the end of the queue: clear the saved position so a later
+                    // replay starts from zero instead of resuming at end-of-file.
+                    current?.let { savePosition(it.id, null) }
                 }
             }
         }
@@ -389,7 +514,10 @@ class AndroidAudioPlayer(
         }
         stopTicker()
         val pos = try {
-            mediaPlayer?.currentPosition?.toLong() ?: current.currentPositionMs
+            // Prefer the player's live position, but never regress to 0 when it is momentarily
+            // unavailable (e.g. immediately after a seek); fall back to the tracked position.
+            val playerPosition = mediaPlayer?.currentPosition?.toLong() ?: 0L
+            if (playerPosition > 0L) playerPosition else current.currentPositionMs
         } catch (e: Exception) {
             current.currentPositionMs
         }
@@ -398,6 +526,10 @@ class AndroidAudioPlayer(
             currentPositionMs = pos
         )
         updateMediaSessionState(FrameworkPlaybackState.STATE_PAUSED, pos)
+        stopCheckpointing()
+        current.currentRecording?.let {
+            savePosition(it.id, ResumePositionPolicy.normalizeForSave(pos, current.durationMs))
+        }
     }
 
     @Synchronized
@@ -439,6 +571,7 @@ class AndroidAudioPlayer(
             }
             mediaPlayer?.start()
             startTicker()
+            startCheckpointing()
             _playbackState.value = current.copy(isPlaying = true)
             mediaSession?.isActive = true
             updateMediaSessionState(FrameworkPlaybackState.STATE_PLAYING, current.currentPositionMs)
@@ -466,6 +599,9 @@ class AndroidAudioPlayer(
             _playbackState.value = current.copy(currentPositionMs = clamped)
             val sessionState = if (current.isPlaying) FrameworkPlaybackState.STATE_PLAYING else FrameworkPlaybackState.STATE_PAUSED
             updateMediaSessionState(sessionState, clamped)
+            current.currentRecording?.let {
+                savePosition(it.id, ResumePositionPolicy.normalizeForSave(clamped, current.durationMs))
+            }
         } catch (ignored: Exception) {
         }
     }
@@ -622,6 +758,8 @@ class AndroidAudioPlayer(
 
     @Synchronized
     override fun stop() {
+        val outgoingId = _playbackState.value.currentRecording?.id
+        val outgoingPosition = currentSavablePosition()
         stopInternal()
         cancelSleepTimer()
         _playbackState.value = _playbackState.value.copy(
@@ -632,6 +770,7 @@ class AndroidAudioPlayer(
             isPrepared = false,
             errorMessage = null
         )
+        outgoingId?.let { savePosition(it, outgoingPosition) }
         updateMediaSessionState(FrameworkPlaybackState.STATE_STOPPED, 0L)
         mediaSession?.isActive = false
     }
@@ -639,6 +778,7 @@ class AndroidAudioPlayer(
     @Synchronized
     private fun stopInternal() {
         stopTicker()
+        stopCheckpointing()
         abandonAudioFocus()
         try {
             val player = mediaPlayer
@@ -654,8 +794,11 @@ class AndroidAudioPlayer(
 
     @Synchronized
     override fun release() {
+        val outgoingId = _playbackState.value.currentRecording?.id
+        val outgoingPosition = currentSavablePosition()
         stopInternal()
         cancelSleepTimer()
+        outgoingId?.let { persistPositionBlocking(it, outgoingPosition) }
         mediaSession?.isActive = false
         mediaSession?.release()
         mediaSession = null

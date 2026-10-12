@@ -77,4 +77,20 @@ interface RecordingDao {
 
     @Query("UPDATE recordings SET displayName = :displayName, modifiedAt = :modifiedAt WHERE id = :id")
     suspend fun renameRecording(id: Long, displayName: String, modifiedAt: Long)
+
+    /**
+     * Narrowly scoped single-column update so restoring/checkpointing a playback position never
+     * rewrites the rest of the row. A non-existent id simply affects zero rows (no insert).
+     */
+    @Query("UPDATE recordings SET resumePositionMs = :positionMs WHERE id = :id")
+    suspend fun setResumePosition(id: Long, positionMs: Long?)
+
+    /**
+     * Narrowly scoped update of only the duration-related columns. Used by the playback duration
+     * synchronization, which must never re-serialize a whole (possibly stale) entity: doing so
+     * could overwrite a newer resume position saved concurrently by the playback subsystem.
+     * A non-existent id affects zero rows (no insert).
+     */
+    @Query("UPDATE recordings SET durationMs = :durationMs, modifiedAt = :modifiedAt WHERE id = :id")
+    suspend fun updateDuration(id: Long, durationMs: Long, modifiedAt: Long)
 }

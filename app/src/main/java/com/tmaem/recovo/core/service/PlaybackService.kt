@@ -316,6 +316,12 @@ class PlaybackService : Service() {
     }
 
     override fun onDestroy() {
+        // Best-effort checkpoint before the process-scoped player is torn down. This runs on a
+        // clean stop only; a process killed without warning never reaches here, so the periodic
+        // and event-driven saves are the primary guarantee.
+        if (::audioPlayer.isInitialized) {
+            (audioPlayer as? com.tmaem.recovo.core.player.AndroidAudioPlayer)?.persistCurrentPositionBlocking()
+        }
         unregisterNoisyReceiver()
         if (isForeground) {
             stopForeground(STOP_FOREGROUND_REMOVE)

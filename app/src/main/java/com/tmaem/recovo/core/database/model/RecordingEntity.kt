@@ -42,5 +42,11 @@ data class RecordingEntity(
     val folderId: Long? = null,
     val isFavorite: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
-    val modifiedAt: Long = System.currentTimeMillis()
+    val modifiedAt: Long = System.currentTimeMillis(),
+    /**
+     * Last known playback position in milliseconds, or null when there is no saved position.
+     * Owned by the playback layer; transient states (never started / already completed) are
+     * stored as null so a finished recording never resumes at end-of-file.
+     */
+    val resumePositionMs: Long? = null
 )

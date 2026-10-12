@@ -24,7 +24,7 @@ import com.tmaem.recovo.core.database.model.TagEntity
         RecordingTagCrossRef::class,
         BookmarkEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class RecovoDatabase : RoomDatabase() {
@@ -44,6 +44,12 @@ abstract class RecovoDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `recordings` ADD COLUMN `resumePositionMs` INTEGER")
+            }
+        }
+
         @Volatile
         private var INSTANCE: RecovoDatabase? = null
 
@@ -54,7 +60,7 @@ abstract class RecovoDatabase : RoomDatabase() {
                     RecovoDatabase::class.java,
                     DATABASE_NAME
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .fallbackToDestructiveMigration(false)
                     .build()
                     .also { INSTANCE = it }

@@ -28,6 +28,19 @@ interface RecordingRepository {
     suspend fun moveRecordingToFolder(recordingId: Long, folderId: Long?)
     suspend fun moveRecordingsToFolder(recordingIds: List<Long>, folderId: Long?)
 
+    /**
+     * Persists the playback resume position for a recording without touching any other column.
+     * A [positionMs] of null clears the saved position; a non-existent id is a no-op.
+     */
+    suspend fun saveResumePosition(recordingId: Long, positionMs: Long?)
+
+    /**
+     * Updates only a recording's duration (and [modifiedAt]) without rewriting the whole row, so
+     * duration synchronization cannot clobber a concurrently saved resume position or any other
+     * field. A non-existent id is a no-op.
+     */
+    suspend fun updateRecordingDuration(recordingId: Long, durationMs: Long, modifiedAt: Long)
+
     // Folders
     fun observeFolders(): Flow<List<FolderEntity>>
     suspend fun getFolderById(id: Long): FolderEntity?

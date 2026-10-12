@@ -773,6 +773,47 @@ class LibraryViewModelTest {
 
         assertTrue(renameSuccess)
         assertEquals("Brand New Name", viewModel.playbackState.value.currentRecording?.displayName)
+
+    }
+
+    @Test
+    fun durationSync_usesTargetedUpdate_andPreservesResumePosition() = runTest(testDispatcher) {
+        val rec = RecordingEntity(
+            id = 801,
+            fileName = "dur.m4a",
+            displayName = "Keep Metadata",
+            filePath = "/fake/dur.m4a",
+            mimeType = "audio/mp4",
+            format = "M4A",
+            durationMs = 30000L,
+            fileSizeBytes = 5000L,
+            sampleRate = 44100,
+            bitRate = 128000,
+            channelCount = 1,
+            isFavorite = true,
+            resumePositionMs = 12000L
+        )
+        fakeRepository.setRecordings(listOf(rec))
+        viewModel.playRecording(rec)
+        advanceUntilIdle()
+
+        // Simulate the playback subsystem saving a newer resume position, then a prepared
+        // duration that differs enough to trigger the duration-sync threshold.
+        fakeRepository.saveResumePosition(rec.id, 25000L)
+        fakePlayer.setPreparedDuration(60000L)
+        advanceUntilIdle()
+
+        // Duration was corrected via the targeted path, not a stale full-row write.
+        assertEquals(listOf(801L to 60000L), fakeRepository.durationUpdates)
+        assertEquals(0, fakeRepository.fullRowUpdateCount)
+
+        val persisted = fakeRepository.recordingsFlow.value.first { it.id == 801L }
+        assertEquals(60000L, persisted.durationMs)
+        // The newer resume position survived; unrelated fields are intact.
+        assertEquals(25000L, persisted.resumePositionMs)
+        assertEquals("Keep Metadata", persisted.displayName)
+        assertTrue(persisted.isFavorite)
+        assertEquals(5000L, persisted.fileSizeBytes)
     }
 
     @Test
@@ -997,6 +1038,11 @@ class LibraryViewModelTest {
             )
         }
 
+        /** Test seam: simulate a prepared track whose real duration differs from the stored value. */
+        fun setPreparedDuration(durationMs: Long) {
+            _state.value = _state.value.copy(durationMs = durationMs, isPrepared = true)
+        }
+
         override fun pause() {
             _state.value = _state.value.copy(isPlaying = false)
         }
@@ -1138,7 +1184,10 @@ class LibraryViewModelTest {
             recordingsFlow.value = recordingsFlow.value + recording
             return recording.id
         }
+        /** Counts full-row writes; a duration-sync regression would make this non-zero. */
+        var fullRowUpdateCount = 0
         override suspend fun updateRecording(recording: RecordingEntity) {
+            fullRowUpdateCount++
             recordingsFlow.value = recordingsFlow.value.map { if (it.id == recording.id) recording else it }
         }
         override suspend fun deleteRecording(recording: RecordingEntity): StorageResult<Boolean> {
@@ -1187,6 +1236,21 @@ class LibraryViewModelTest {
             val set = recordingIds.toSet()
             recordingsFlow.value = recordingsFlow.value.map {
                 if (set.contains(it.id)) it.copy(folderId = folderId) else it
+            }
+        }
+        override suspend fun saveResumePosition(recordingId: Long, positionMs: Long?) {
+            recordingsFlow.value = recordingsFlow.value.map {
+                if (it.id == recordingId) it.copy(resumePositionMs = positionMs) else it
+            }
+        }
+        /** Records each targeted duration update as (recordingId to durationMs). */
+        val durationUpdates = mutableListOf<Pair<Long, Long>>()
+        override suspend fun updateRecordingDuration(recordingId: Long, durationMs: Long, modifiedAt: Long) {
+            // Mirror the real narrow DAO update: only duration + modifiedAt change, so a
+            // resume position (or any other field) is preserved.
+            durationUpdates += (recordingId to durationMs)
+            recordingsFlow.value = recordingsFlow.value.map {
+                if (it.id == recordingId) it.copy(durationMs = durationMs, modifiedAt = modifiedAt) else it
             }
         }
         override fun observeFolders(): Flow<List<FolderEntity>> = foldersFlow

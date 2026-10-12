@@ -455,4 +455,208 @@ class RecovoDatabaseTest {
         writableDb.close()
         context.deleteDatabase("test_migration.db")
     }
+
+    // --- Resume position (schema v3) ---
+
+    @Test
+    fun saveAndReadResumePositionById() = runTest {
+        val id = recordingDao.insert(
+            RecordingEntity(
+                fileName = "resume.m4a",
+                displayName = "Resume",
+                filePath = "/p/resume.m4a",
+                mimeType = "audio/mp4",
+                format = "M4A",
+                durationMs = 60_000L,
+                fileSizeBytes = 1_000L,
+                sampleRate = 44_100,
+                bitRate = 128_000,
+                channelCount = 1
+            )
+        )
+        assertNull(recordingDao.getById(id)!!.resumePositionMs)
+
+        recordingDao.setResumePosition(id, 12_345L)
+        assertEquals(12_345L, recordingDao.getById(id)!!.resumePositionMs)
+
+        // Clearing stores null again.
+        recordingDao.setResumePosition(id, null)
+        assertNull(recordingDao.getById(id)!!.resumePositionMs)
+    }
+
+    @Test
+    fun setResumePosition_doesNotOverwriteOtherFields() = runTest {
+        val folderId = folderDao.insert(FolderEntity(name = "Work"))
+        val tagId = tagDao.insert(TagEntity(name = "meeting"))
+        val id = recordingDao.insert(
+            RecordingEntity(
+                fileName = "keep.m4a",
+                displayName = "Keep My Metadata",
+                filePath = "/p/keep.m4a",
+                mimeType = "audio/mp4",
+                format = "M4A",
+                durationMs = 90_000L,
+                fileSizeBytes = 2_000L,
+                sampleRate = 48_000,
+                bitRate = 192_000,
+                channelCount = 2,
+                folderId = folderId,
+                isFavorite = true,
+                createdAt = 111L,
+                modifiedAt = 222L
+            )
+        )
+        tagDao.insertCrossRef(RecordingTagCrossRef(id, tagId))
+        bookmarkDao.insert(BookmarkEntity(recordingId = id, positionMs = 5_000L, label = "Intro", createdAt = 1L))
+
+        recordingDao.setResumePosition(id, 33_000L)
+
+        val after = recordingDao.getById(id)!!
+        assertEquals("Keep My Metadata", after.displayName)
+        assertEquals(folderId, after.folderId)
+        assertTrue(after.isFavorite)
+        assertEquals(90_000L, after.durationMs)
+        assertEquals(2_000L, after.fileSizeBytes)
+        assertEquals(48_000, after.sampleRate)
+        assertEquals(192_000, after.bitRate)
+        assertEquals(2, after.channelCount)
+        assertEquals(111L, after.createdAt)
+        assertEquals(222L, after.modifiedAt)
+        assertEquals(33_000L, after.resumePositionMs)
+
+        // Tags and bookmarks are untouched.
+        assertEquals(listOf(tagId), tagDao.getTagsForRecording(id).map { it.id })
+        assertEquals(1, bookmarkDao.getBookmarksForRecording(id).size)
+        assertEquals(5_000L, bookmarkDao.getBookmarksForRecording(id).first().positionMs)
+    }
+
+    @Test
+    fun setResumePosition_nonexistentId_doesNotInsertRow() = runTest {
+        recordingDao.setResumePosition(9_999L, 1_000L)
+        assertNull(recordingDao.getById(9_999L))
+        assertEquals(0, recordingDao.getById(9_999L)?.let { 1 } ?: 0)
+    }
+
+    @Test
+    fun updateDuration_changesOnlyDurationAndModifiedAt() = runTest {
+        val folderId = folderDao.insert(FolderEntity(name = "Work"))
+        val tagId = tagDao.insert(TagEntity(name = "meeting"))
+        val id = recordingDao.insert(
+            RecordingEntity(
+                fileName = "dur.m4a",
+                displayName = "Duration Target",
+                filePath = "/p/dur.m4a",
+                mimeType = "audio/mp4",
+                format = "M4A",
+                durationMs = 90_000L,
+                fileSizeBytes = 2_000L,
+                sampleRate = 48_000,
+                bitRate = 192_000,
+                channelCount = 2,
+                folderId = folderId,
+                isFavorite = true,
+                createdAt = 111L,
+                modifiedAt = 222L
+            )
+        )
+        tagDao.insertCrossRef(RecordingTagCrossRef(id, tagId))
+        bookmarkDao.insert(BookmarkEntity(recordingId = id, positionMs = 5_000L, label = "Intro", createdAt = 1L))
+        recordingDao.setResumePosition(id, 33_000L)
+
+        recordingDao.updateDuration(id, 77_000L, 999L)
+
+        val after = recordingDao.getById(id)!!
+        // Only the duration-related columns change.
+        assertEquals(77_000L, after.durationMs)
+        assertEquals(999L, after.modifiedAt)
+        // A newer resume position is preserved, never clobbered by the duration write.
+        assertEquals(33_000L, after.resumePositionMs)
+        // All unrelated fields are untouched.
+        assertEquals("Duration Target", after.displayName)
+        assertEquals(folderId, after.folderId)
+        assertTrue(after.isFavorite)
+        assertEquals(2_000L, after.fileSizeBytes)
+        assertEquals(48_000, after.sampleRate)
+        assertEquals(192_000, after.bitRate)
+        assertEquals(2, after.channelCount)
+        assertEquals(111L, after.createdAt)
+
+        assertEquals(listOf(tagId), tagDao.getTagsForRecording(id).map { it.id })
+        assertEquals(1, bookmarkDao.getBookmarksForRecording(id).size)
+        assertEquals(5_000L, bookmarkDao.getBookmarksForRecording(id).first().positionMs)
+    }
+
+    @Test
+    fun updateDuration_nonexistentId_doesNotInsertRow() = runTest {
+        recordingDao.updateDuration(9_999L, 1_000L, 1L)
+        assertNull(recordingDao.getById(9_999L))
+    }
+
+
+    @Test
+    fun migration2to3_addsNullableColumn_preservingExistingRows() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val dbName = "test_migration_2_3.db"
+        context.deleteDatabase(dbName)
+
+        // Build a genuine v2 database (version 2) with the exact v2 schema, then insert a row.
+        val helper = androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory()
+            .create(
+                androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context)
+                    .name(dbName)
+                    .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(2) {
+                        override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                            db.execSQL("CREATE TABLE IF NOT EXISTS `folders` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `modifiedAt` INTEGER NOT NULL)")
+                            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_folders_name` ON `folders` (`name`)")
+                            db.execSQL("CREATE TABLE IF NOT EXISTS `recordings` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `fileName` TEXT NOT NULL, `displayName` TEXT NOT NULL, `filePath` TEXT NOT NULL, `mimeType` TEXT NOT NULL, `format` TEXT NOT NULL, `durationMs` INTEGER NOT NULL, `fileSizeBytes` INTEGER NOT NULL, `sampleRate` INTEGER NOT NULL, `bitRate` INTEGER NOT NULL, `channelCount` INTEGER NOT NULL, `folderId` INTEGER, `isFavorite` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `modifiedAt` INTEGER NOT NULL, FOREIGN KEY(`folderId`) REFERENCES `folders`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )")
+                            db.execSQL("CREATE INDEX IF NOT EXISTS `index_recordings_folderId` ON `recordings` (`folderId`)")
+                            db.execSQL("CREATE INDEX IF NOT EXISTS `index_recordings_createdAt` ON `recordings` (`createdAt`)")
+                            db.execSQL("CREATE INDEX IF NOT EXISTS `index_recordings_displayName` ON `recordings` (`displayName`)")
+                            db.execSQL("CREATE INDEX IF NOT EXISTS `index_recordings_isFavorite` ON `recordings` (`isFavorite`)")
+                            db.execSQL("CREATE TABLE IF NOT EXISTS `tags` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)")
+                            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_tags_name` ON `tags` (`name`)")
+                            db.execSQL("CREATE TABLE IF NOT EXISTS `recording_tag_cross_ref` (`recordingId` INTEGER NOT NULL, `tagId` INTEGER NOT NULL, PRIMARY KEY(`recordingId`, `tagId`), FOREIGN KEY(`recordingId`) REFERENCES `recordings`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`tagId`) REFERENCES `tags`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+                            db.execSQL("CREATE INDEX IF NOT EXISTS `index_recording_tag_cross_ref_recordingId` ON `recording_tag_cross_ref` (`recordingId`)")
+                            db.execSQL("CREATE INDEX IF NOT EXISTS `index_recording_tag_cross_ref_tagId` ON `recording_tag_cross_ref` (`tagId`)")
+                            db.execSQL("CREATE TABLE IF NOT EXISTS `bookmarks` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `recordingId` INTEGER NOT NULL, `positionMs` INTEGER NOT NULL, `label` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, FOREIGN KEY(`recordingId`) REFERENCES `recordings`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+                            db.execSQL("CREATE INDEX IF NOT EXISTS `index_bookmarks_recordingId` ON `bookmarks` (`recordingId`)")
+                            db.execSQL("CREATE INDEX IF NOT EXISTS `index_bookmarks_positionMs` ON `bookmarks` (`positionMs`)")
+                            db.execSQL("INSERT INTO folders (id, name, createdAt, modifiedAt) VALUES (1, 'Work', 10, 20)")
+                            db.execSQL("INSERT INTO recordings (id, fileName, displayName, filePath, mimeType, format, durationMs, fileSizeBytes, sampleRate, bitRate, channelCount, folderId, isFavorite, createdAt, modifiedAt) VALUES (7, 'v2.m4a', 'V2 Row', '/p/v2.m4a', 'audio/mp4', 'M4A', 60000, 2048, 44100, 128000, 2, 1, 1, 111, 222)")
+                            db.execSQL("INSERT INTO tags (id, name, createdAt) VALUES (1, 'meeting', 30)")
+                            db.execSQL("INSERT INTO recording_tag_cross_ref (recordingId, tagId) VALUES (7, 1)")
+                            db.execSQL("INSERT INTO bookmarks (id, recordingId, positionMs, label, createdAt) VALUES (1, 7, 5000, 'Intro', 40)")
+                        }
+
+                        override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+                    })
+                    .build()
+            )
+
+        val db = helper.writableDatabase
+        RecovoDatabase.MIGRATION_2_3.migrate(db)
+
+        // The new column exists and is initially null for the pre-existing row.
+        db.query("SELECT resumePositionMs FROM recordings WHERE id = 7").use { c ->
+            assertTrue(c.moveToFirst())
+            assertTrue(c.isNull(0))
+        }
+        // Existing metadata survives.
+        db.query("SELECT displayName, folderId, isFavorite, durationMs FROM recordings WHERE id = 7").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("V2 Row", c.getString(0))
+            assertEquals(1L, c.getLong(1))
+            assertEquals(1, c.getInt(2))
+            assertEquals(60_000L, c.getLong(3))
+        }
+        // Related tables survive.
+        db.query("SELECT COUNT(*) FROM recording_tag_cross_ref WHERE recordingId = 7").use { c ->
+            assertTrue(c.moveToFirst()); assertEquals(1, c.getInt(0))
+        }
+        db.query("SELECT COUNT(*) FROM bookmarks WHERE recordingId = 7").use { c ->
+            assertTrue(c.moveToFirst()); assertEquals(1, c.getInt(0))
+        }
+        db.close()
+        context.deleteDatabase(dbName)
+    }
 }

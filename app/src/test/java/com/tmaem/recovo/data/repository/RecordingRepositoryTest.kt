@@ -217,4 +217,79 @@ class RecordingRepositoryTest {
         assertEquals(1, bookmarks.size)
         assertEquals("Topic Intro", bookmarks[0].label)
     }
+
+    @Test
+    fun saveResumePosition_persistsAndDoesNotOverwriteMetadata() = runTest(testDispatcher) {
+        val recId = repository.insertRecording(
+            RecordingEntity(
+                fileName = "resume.m4a",
+                displayName = "Resume Me",
+                filePath = "/dummy_resume.m4a",
+                mimeType = "audio/mp4",
+                format = "M4A",
+                durationMs = 30_000L,
+                fileSizeBytes = 4_000L,
+                sampleRate = 44_100,
+                bitRate = 128_000,
+                channelCount = 1,
+                isFavorite = true
+            )
+        )
+
+        repository.saveResumePosition(recId, 7_500L)
+        val after = repository.getRecordingById(recId)!!
+        assertEquals(7_500L, after.resumePositionMs)
+        assertEquals("Resume Me", after.displayName)
+        assertTrue(after.isFavorite)
+        assertEquals(30_000L, after.durationMs)
+
+        repository.saveResumePosition(recId, null)
+        assertNull(repository.getRecordingById(recId)!!.resumePositionMs)
+    }
+
+    @Test
+    fun saveResumePosition_unknownId_doesNotInsertRow() = runTest(testDispatcher) {
+        repository.saveResumePosition(4_242L, 1_000L)
+        assertNull(repository.getRecordingById(4_242L))
+    }
+    @Test
+    fun updateRecordingDuration_changesOnlyDurationAndKeepsResumePosition() = runTest(testDispatcher) {
+        val recId = repository.insertRecording(
+            RecordingEntity(
+                fileName = "dur.m4a",
+                displayName = "Keep Everything",
+                filePath = "/dummy_dur.m4a",
+                mimeType = "audio/mp4",
+                format = "M4A",
+                durationMs = 30_000L,
+                fileSizeBytes = 4_000L,
+                sampleRate = 44_100,
+                bitRate = 128_000,
+                channelCount = 1,
+                isFavorite = true
+            )
+        )
+        // A newer resume position exists (as the playback subsystem would have saved).
+        repository.saveResumePosition(recId, 12_500L)
+
+        repository.updateRecordingDuration(recId, 42_000L, 999L)
+
+        val after = repository.getRecordingById(recId)!!
+        assertEquals(42_000L, after.durationMs)
+        assertEquals(999L, after.modifiedAt)
+        // The resume position survives the duration update (the defect this task fixes).
+        assertEquals(12_500L, after.resumePositionMs)
+        assertEquals("Keep Everything", after.displayName)
+        assertTrue(after.isFavorite)
+        assertEquals(4_000L, after.fileSizeBytes)
+        assertEquals(44_100, after.sampleRate)
+        assertEquals(128_000, after.bitRate)
+    }
+
+    @Test
+    fun updateRecordingDuration_unknownId_doesNotInsertRow() = runTest(testDispatcher) {
+        repository.updateRecordingDuration(7_777L, 1_000L, 1L)
+        assertNull(repository.getRecordingById(7_777L))
+    }
+
 }

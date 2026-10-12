@@ -21,6 +21,7 @@ import com.tmaem.recovo.core.storage.StorageManager
 import com.tmaem.recovo.core.storage.StorageResult
 import com.tmaem.recovo.data.repository.RecordingRepository
 import com.tmaem.recovo.data.repository.RecordingRepositoryImpl
+import com.tmaem.recovo.data.repository.RepositoryPositionSaver
 import com.tmaem.recovo.domain.model.SortOrder
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
@@ -103,9 +104,12 @@ class LibraryViewModel(
                 if (state.isPrepared && rec != null && state.durationMs > 0L) {
                     if (kotlin.math.abs(state.durationMs - rec.durationMs) >= 500L) {
                         try {
-                            val updated = rec.copy(durationMs = state.durationMs, modifiedAt = System.currentTimeMillis())
-                            recordingRepository.updateRecording(updated)
-                            audioPlayer.updateCurrentRecordingMetadata(updated)
+                            val now = System.currentTimeMillis()
+                            // Targeted duration-only write: a full-row update from this stale snapshot could
+                            // overwrite a newer resume position (or other fields) saved concurrently by the
+                            // playback subsystem.
+                            recordingRepository.updateRecordingDuration(rec.id, state.durationMs, now)
+                            audioPlayer.updateCurrentRecordingMetadata(rec.copy(durationMs = state.durationMs, modifiedAt = now))
                         } catch (ignored: Exception) {
                         }
                     }
@@ -654,6 +658,11 @@ class LibraryViewModel(
                 storageManager = storageManager
             )
             val audioPlayer = AudioPlayerProvider.get(appContext)
+            // The player owns playback beyond this screen, so it (not this ViewModel) persists
+            // resume positions. Bind the repository-backed sink to the process-scoped player.
+            AudioPlayerProvider.setPositionSaver(
+                RepositoryPositionSaver(repository)
+            )
             return LibraryViewModel(repository, audioPlayer) as T
         }
 
@@ -670,6 +679,9 @@ class LibraryViewModel(
                 storageManager = storageManager
             )
             val audioPlayer = AudioPlayerProvider.get(appContext)
+            AudioPlayerProvider.setPositionSaver(
+                RepositoryPositionSaver(repository)
+            )
             val savedStateHandle = extras.createSavedStateHandle()
             return LibraryViewModel(repository, audioPlayer, savedStateHandle) as T
         }

@@ -130,6 +130,14 @@ class RecordingRepositoryImpl(
         }
     }
 
+    override suspend fun saveResumePosition(recordingId: Long, positionMs: Long?) = withContext(ioDispatcher) {
+        recordingDao.setResumePosition(recordingId, positionMs)
+    }
+
+    override suspend fun updateRecordingDuration(recordingId: Long, durationMs: Long, modifiedAt: Long) = withContext(ioDispatcher) {
+        recordingDao.updateDuration(recordingId, durationMs, modifiedAt)
+    }
+
     override fun observeFolders(): Flow<List<FolderEntity>> {
         return folderDao.observeAllFolders()
     }
